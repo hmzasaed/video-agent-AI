@@ -1,0 +1,88 @@
+# ============================================
+# AI Meeting Assistant - requirements.txt
+# ============================================
+
+# -----------------------------
+# UI
+# -----------------------------
+streamlit
+
+# -----------------------------
+# Audio / Video Download
+# -----------------------------
+yt-dlp
+
+# Audio processing
+pydub
+ffmpeg-python
+
+# -----------------------------
+# Local Whisper Transcription
+# -----------------------------
+openai-whisper
+
+# PyTorch backend required by Whisper
+torch
+torchaudio
+
+# -----------------------------
+# Translation
+# -----------------------------
+deep-translator
+
+# -----------------------------
+# LangChain / LCEL
+# -----------------------------
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+
+# -----------------------------
+# Mistral API
+# -----------------------------
+langchain-mistralai
+mistralai
+
+# -----------------------------
+# RAG / Vector Database
+# -----------------------------
+chromadb
+
+# -----------------------------
+# HuggingFace Embeddings
+# -----------------------------
+sentence-transformers
+transformers
+huggingface-hub
+
+# -----------------------------
+# Machine Learning / Numerical
+# -----------------------------
+numpy
+scikit-learn
+
+# -----------------------------
+# Document / File Processing
+# -----------------------------
+pypdf
+
+# -----------------------------
+# PDF Export
+# -----------------------------
+reportlab
+
+# -----------------------------
+# Environment Variables
+# -----------------------------
+python-dotenv
+
+# -----------------------------
+# HTTP / API Utilities
+# -----------------------------
+requests
+
+# -----------------------------
+# Progress / Utilities
+# -----------------------------
+tqdm
