@@ -54,6 +54,7 @@ chromadb
 # -----------------------------
 sentence-transformers
 transformers
+sentencepiece
 huggingface-hub
 
 # -----------------------------
@@ -86,3 +87,8 @@ requests
 # Progress / Utilities
 # -----------------------------
 tqdm
+
+# -----------------------------
+# Web UI (Flask backend)
+# -----------------------------
+flask

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Summarize any YouTube video into a detailed report with action items, decisions, and a full transcript.">
+    <title>AI Video Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="topbar">
+            <button id="themeToggle" class="theme-toggle" type="button">☀️ Light</button>
+        </div>
+
+        <header>
+            <h1>🎥 AI Video Assistant</h1>
+            <p class="subtitle">
+                Paste a YouTube link and get a detailed summary, action items, decisions,
+                questions, and the full transcript.
+            </p>
+        </header>
+
+        <!-- ── Input ───────────────────────────────────────────── -->
+        <section class="card" aria-label="Analyze a video">
+            <div class="input-group">
+                <label class="visually-hidden" for="videoUrl">Video URL or file path</label>
+                <input
+                    type="text"
+                    id="videoUrl"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    autocomplete="off"
+                    spellcheck="false">
+                <button id="analyzeBtn" class="btn-primary" type="button">Analyze</button>
+            </div>
+
+            <p class="hint">
+                A local audio or video file path works too. Long videos take several
+                minutes — audio is transcribed locally with Whisper.
+                Press <kbd>Ctrl</kbd>+<kbd>K</kbd> to jump back to this box.
+            </p>
+
+            <div id="errorMessage" class="alert" role="alert"></div>
+
+            <div id="recent" class="recent">
+                <div class="recent-head">
+                    <span>Recent</span>
+                    <button id="clearRecent" class="btn-ghost" type="button">Clear</button>
+                </div>
+                <div id="recentList" class="recent-list"></div>
+            </div>
+        </section>
+
+        <!-- ── Progress ────────────────────────────────────────── -->
+        <section id="progressCard" class="card" aria-label="Analysis progress">
+            <div id="videoMeta" class="meta">
+                <img id="metaThumb" src="" alt="">
+                <div>
+                    <div id="metaTitle" class="meta-title"></div>
+                    <div id="metaSub" class="meta-sub"></div>
+                </div>
+            </div>
+
+            <div class="progress-head">
+                <div class="spinner" aria-hidden="true"></div>
+                <span id="progressMessage" role="status" aria-live="polite">Starting...</span>
+                <div class="progress-meta">
+                    <span id="percentLabel">0%</span>
+                    <span id="elapsed">00:00</span>
+                    <button id="cancelBtn" class="btn-danger" type="button">Cancel</button>
+                </div>
+            </div>
+
+            <div class="progress-track"
+                 role="progressbar"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 aria-labelledby="progressMessage">
+                <div id="progressFill" class="progress-fill"></div>
+            </div>
+
+            <ul class="steps">
+                <li id="step-download">1 · Download audio</li>
+                <li id="step-transcribe">2 · Transcribe</li>
+                <li id="step-summarize">3 · Summarize</li>
+                <li id="step-extract">4 · Extract insights</li>
+            </ul>
+        </section>
+
+        <!-- ── Results ─────────────────────────────────────────── -->
+        <section id="results" class="card" aria-label="Analysis results">
+            <nav class="tabs" role="tablist" aria-label="Result sections">
+                <button class="tab" role="tab" data-tab="summary"
+                        aria-selected="true" aria-controls="panel-summary"
+                        type="button">📝 Summary</button>
+                <button class="tab" role="tab" data-tab="actions"
+                        aria-selected="false" aria-controls="panel-actions"
+                        tabindex="-1" type="button">✅ Action Items</button>
+                <button class="tab" role="tab" data-tab="decisions"
+                        aria-selected="false" aria-controls="panel-decisions"
+                        tabindex="-1" type="button">⚖️ Decisions</button>
+                <button class="tab" role="tab" data-tab="questions"
+                        aria-selected="false" aria-controls="panel-questions"
+                        tabindex="-1" type="button">❓ Questions</button>
+                <button class="tab" role="tab" data-tab="transcript"
+                        aria-selected="false" aria-controls="panel-transcript"
+                        tabindex="-1" type="button">📜 Transcript</button>
+            </nav>
+
+            <div class="panel-toolbar">
+                <span id="panelStats" class="panel-stats"></span>
+                <button id="copyBtn" class="btn-ghost" type="button">Copy</button>
+                <button id="downloadMdBtn" class="btn-ghost" type="button">.md</button>
+                <button id="downloadTxtBtn" class="btn-ghost" type="button">.txt</button>
+            </div>
+
+            <div id="panel-summary" class="panel active" role="tabpanel"></div>
+            <div id="panel-actions" class="panel" role="tabpanel"></div>
+            <div id="panel-decisions" class="panel" role="tabpanel"></div>
+            <div id="panel-questions" class="panel" role="tabpanel"></div>
+
+            <div id="panel-transcript" class="panel" role="tabpanel">
+                <div class="transcript-tools">
+                    <label class="visually-hidden" for="transcriptSearch">Search transcript</label>
+                    <input type="search" id="transcriptSearch"
+                           placeholder="Search the transcript..." autocomplete="off">
+                    <span id="searchCount" aria-live="polite"></span>
+                </div>
+                <div id="transcriptText" class="transcript-text"></div>
+            </div>
+        </section>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
