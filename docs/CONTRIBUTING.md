@@ -8,8 +8,8 @@ Follow [SETUP.md](SETUP.md), then confirm both suites pass before changing
 anything:
 
 ```powershell
-python tests/test_api.py        # 41 checks
-node tests/test_frontend.mjs    # 30 checks
+python tests/test_api.py        # 64 checks
+node tests/test_frontend.mjs    # 35 checks
 ```
 
 If they fail on a clean checkout, fix that first — you cannot tell what you
@@ -26,11 +26,15 @@ core/
   transcriber.py        Whisper; owns the Cancelled exception
   summarize.py          Map-reduce summarization + length banding
   extractor.py          Action items, decisions, questions
+  vector_store.py       Chroma index for Q&A (local embeddings)
+  rag_engine.py         Retrieval + cited answers
 utils/
   audio_processor.py    Download, convert, chunk
-templates/index.html    Markup only
-static/css/style.css    Tokens + components
-static/js/main.js       Polling, rendering, interaction
+templates/index.html    Markup only: landing page, analyzer, icon sprite
+static/css/style.css    Tokens, components, motion
+static/js/main.js       Analyzer: polling, rendering, Q&A, interaction
+static/js/site.js       Landing page: reveals, nav, mobile menu
+static/img/             Logo, favicons, illustrations
 tests/                  Both suites
 docs/                   This documentation
 ```
@@ -53,7 +57,14 @@ anything non-obvious. Comments explain *why*, not *what*. Errors raise
 Functions are small and pure where possible so the test suite can reach them.
 
 **CSS.** Never hard-code a colour — use a token from `:root`. Add new tokens to
-both the dark and light blocks. Components reference tokens only.
+both the dark and light blocks. Components reference tokens only. Any new
+animation must be covered by the `prefers-reduced-motion` block.
+
+**Icons.** Add to the SVG sprite in `index.html`; never use emoji as icons.
+
+**`main.js` vs `site.js`.** Anything the analyzer needs goes in `main.js`, and
+DOM wiring stays inside its `DOMContentLoaded` block — the frontend test suite
+cuts the file at that point. Landing-page behaviour goes in `site.js`.
 
 ---
 
@@ -64,7 +75,8 @@ both the dark and light blocks. Components reference tokens only.
 1. Write the module in `core/`, taking `progress` and `should_cancel` callbacks.
 2. Call it from `_run_analysis` in `app.py`, between `checkpoint()` calls.
 3. Add it to `STAGE_WEIGHTS` and rebalance the percentages.
-4. Add a step pill to the template and to `STAGE_ORDER` in `main.js`.
+4. Add a stepper `<li id="step-x">` to the template and the stage to
+   `STAGE_ORDER` in `main.js`.
 5. Add fields to the job dict in `analyze()`.
 6. Update [ARCHITECTURE.md](ARCHITECTURE.md) and [API.md](API.md).
 
@@ -79,7 +91,8 @@ Tab wiring, keyboard navigation, and copy all work generically.
 
 ### Changing a prompt
 
-Prompts live in `core/summarize.py` and `core/extractor.py`. They are the
+Prompts live in `core/summarize.py`, `core/extractor.py`, and
+`core/rag_engine.py`. They are the
 product — a prompt change is a behaviour change.
 
 Test both ends of the length range before and after

@@ -29,7 +29,7 @@ globalThis.localStorage = {
 
 const EXPORTS = [
     "renderMarkdown", "escapeHtml", "formatDuration", "formatClock",
-    "countWords", "hintFor", "looksLikeUrl",
+    "countWords", "hintFor", "looksLikeUrl", "linkCitations",
 ];
 
 const module_ = await import(
@@ -49,7 +49,7 @@ function check(label, ok, detail = "") {
 
 const {
     renderMarkdown, escapeHtml, formatDuration, formatClock,
-    countWords, hintFor, looksLikeUrl,
+    countWords, hintFor, looksLikeUrl, linkCitations,
 } = module_;
 
 // ── Escaping / XSS ──────────────────────────────────────────────────
@@ -118,6 +118,15 @@ check("no hint for unknown", hintFor("something odd happened") === "");
 // ── URL detection ───────────────────────────────────────────────────
 check("http url", looksLikeUrl("https://youtu.be/x"));
 check("windows path is not a url", !looksLikeUrl("C:\\video.mp4"));
+
+// ── Q&A citations ───────────────────────────────────────────────────
+check("citation marked",
+    linkCitations("<p>Friday [2].</p>") === '<p>Friday <sup class="cite">[2]</sup>.</p>');
+check("grouped citation", linkCitations("x [1, 3]").includes('<sup class="cite">[1,3]</sup>'));
+check("non-numeric brackets untouched", linkCitations("[todo]") === "[todo]");
+const cited = linkCitations(renderMarkdown("<script>x</script> [1]"));
+check("citations keep escaping", !cited.includes("<script>") && cited.includes("cite"));
+check("hint: qa indexing", hintFor("Q&A indexing failed: boom").length > 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

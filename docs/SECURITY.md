@@ -16,6 +16,8 @@ authorization, and no tenancy.
 | `GOOGLE_API_KEY` | Read from `.env`, sent only to `generativelanguage.googleapis.com` |
 | Source audio | Never leaves the machine |
 | Transcript text | Sent to Google's Gemini API |
+| Q&A index | Embedded locally into `data/chroma/`, untracked, kept until deleted |
+| Questions asked | Sent to Gemini with the retrieved excerpts |
 | Downloaded media | Written to `downloads/`, untracked, never cleaned up |
 | Job results | In memory only, lost on restart |
 
@@ -23,8 +25,9 @@ authorization, and no tenancy.
 
 ## What stays local
 
-Transcription runs on your machine via `openai-whisper`. **Audio is never
-uploaded anywhere.** For recordings of meetings, calls, or anything
+Transcription runs on your machine via `faster-whisper` (or `openai-whisper`
+as a fallback). **Audio is never uploaded anywhere.** Q&A embeddings are also
+computed locally (ONNX MiniLM) and stored on local disk. For recordings of meetings, calls, or anything
 confidential, this is the property that matters most.
 
 What *is* sent to Google is the **transcript text**, plus the section notes and
@@ -32,6 +35,15 @@ summary derived from it — in four to six requests per video. If the spoken
 content itself is sensitive, that is the boundary to consider. Google's
 handling is governed by the terms of whichever API tier your key belongs to;
 free-tier usage may be retained and used for product improvement.
+
+For each Q&A question, Gemini receives the question, up to six retrieved
+excerpts from that video, and up to four earlier turns of the conversation.
+
+The browser also loads the **Space Grotesk** and **DM Sans** fonts from Google
+Fonts, which means the page makes requests to `fonts.googleapis.com` and
+`fonts.gstatic.com`. No analysis data is included in those requests. To remove
+them, self-host the fonts or delete the font `<link>` tags; the system-font
+fallbacks take over.
 
 There is no way to get summaries without sending text to a model provider.
 Running a local LLM instead is on the [roadmap](ROADMAP.md).
@@ -129,7 +141,8 @@ This must be `False` anywhere other than your own machine.
 | Vector | Current state |
 | --- | --- |
 | Unbounded job creation | No rate limiting — each request spawns a thread and a download |
-| Disk growth | `downloads/` is never cleaned; every analysis leaves MP3, WAV, and chunk files |
+| Disk growth | `downloads/` is never cleaned; every analysis leaves MP3, WAV, and chunk files. `data/chroma/` grows with each indexed video |
+| Question length | Capped at 1,000 characters; history trimmed to 4 turns of 2,000 characters |
 | Memory | Bounded: jobs evicted after 2h, capped at 50 |
 | Video length | Unbounded — a 10-hour video will be downloaded and transcribed |
 
@@ -147,7 +160,7 @@ stale versions are the most common cause of download failures:
 pip install --upgrade yt-dlp
 ```
 
-`torch` and `openai-whisper` are large and pull in substantial transitive
+`torch`, `openai-whisper`, and `chromadb` are large and pull in substantial transitive
 dependency trees. Review advisories before deploying anything built on this.
 
 ---

@@ -10,8 +10,8 @@ Getting the project running on a new machine.
 | --- | --- | --- |
 | **Python 3.10+** | Uses `str \| Path` union syntax | `python --version` |
 | **FFmpeg on PATH** | Audio extraction and conversion | `ffmpeg -version` |
-| **A Google AI Studio key** | Summarization and extraction | — |
-| ~1 GB free disk | Whisper model + downloaded audio | — |
+| **A Google AI Studio key** | Summarization, extraction, and Q&A | — |
+| ~1 GB free disk | Whisper model, embedding model, downloaded audio | — |
 
 Python 3.11 is what this project is developed against.
 
@@ -32,8 +32,8 @@ download and chunking stages both shell out to it.
 ## Install
 
 ```powershell
-git clone <repository-url>
-cd AI-Assistant
+git clone https://github.com/hmzasaed/video-agent-AI.git
+cd video-agent-AI
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1      # macOS/Linux: source .venv/bin/activate
@@ -41,8 +41,10 @@ python -m venv .venv
 pip install -r Requirements.txt
 ```
 
-The install pulls in PyTorch, which is large (~2 GB with CUDA builds). On a
-slow connection expect this to take a while.
+The install pulls in PyTorch (for the `openai-whisper` fallback), which is
+large (~2 GB with CUDA builds). On a slow connection expect this to take a
+while. `faster-whisper` is used when available and does not need PyTorch at
+runtime.
 
 ---
 
@@ -67,6 +69,8 @@ personal use but is rate limited — the app handles 429s with a clear message.
 | --- | --- | --- |
 | `GEMINI_MODEL` | `gemini-3.5-flash-lite` | `gemini-3.5-flash` gives richer summaries at higher cost |
 | `WHISPER_MODEL` | `base` | See the table below |
+| `CHROMA_DIR` | `data/chroma` | Where the Q&A index is stored |
+| `RAG_TOP_K` | `6` | Excerpts retrieved per question |
 | `MISTRAL_API_KEY` | — | Reserved; not used |
 
 #### Choosing a Whisper model
@@ -79,7 +83,8 @@ personal use but is rate limited — the app handles 429s with a clear message.
 | `medium` | ~1.5 GB | Slow on CPU | Accuracy matters more than time |
 | `large` | ~3 GB | Very slow without a GPU | GPU only |
 
-The model downloads **once**, on first use, to `~/.cache/whisper/`. The first
+The model downloads **once**, on first use (to the Hugging Face cache for
+`faster-whisper`, or `~/.cache/whisper/` for `openai-whisper`). The first
 run with a new size therefore appears to hang on "Loading the Whisper
 model…" while several hundred MB download. This is normal.
 
@@ -125,10 +130,12 @@ python test.py "https://www.youtube.com/watch?v=..."
 Expect the first analysis to be much slower than later ones:
 
 1. Whisper downloads the model (once per size).
-2. PyTorch initialises.
-3. `yt-dlp` downloads the audio.
-4. Transcription runs — roughly real-time on CPU with `base`.
-5. Four to six Gemini calls.
+2. `yt-dlp` downloads the audio.
+3. Transcription runs — faster than real-time on CPU with `base` and
+   `faster-whisper`.
+4. Four to six Gemini calls.
+5. The Q&A embedding model downloads once (~80 MB to `~/.cache/chroma`), then
+   the video is indexed.
 
 A 19-second clip on a cold cache took ~7 minutes, almost entirely the 460 MB
 `small` model download. The same clip on a warm cache takes well under a minute.
@@ -139,7 +146,7 @@ A 19-second clip on a cold cache took ~7 minutes, almost entirely the 460 MB
 
 ```bash
 # Dependencies importable
-python -c "import flask, yt_dlp, pydub, whisper, torch, dotenv, requests; print('ok')"
+python -c "import flask, yt_dlp, pydub, faster_whisper, chromadb, dotenv, requests; print('ok')"
 
 # FFmpeg reachable
 ffmpeg -version | head -1

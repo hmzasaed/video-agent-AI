@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 440" role="img" aria-labelledby="t d">
+  <title id="t">Product preview</title>
+  <desc id="d">A video thumbnail next to a generated summary with action items, decisions and a question answered with a citation.</desc>
+  <defs>
+    <linearGradient id="thumb" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#134E4A"/><stop offset="1" stop-color="#0E7490"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2DD4BF"/><stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="638" height="438" rx="18" fill="#0F1B1E" stroke="#2F4B50" stroke-width="2"/>
+  <rect x="1" y="1" width="638" height="42" rx="18" fill="#142427"/>
+  <rect x="1" y="30" width="638" height="13" fill="#142427"/>
+  <circle cx="24" cy="22" r="5.5" fill="#F87171"/><circle cx="42" cy="22" r="5.5" fill="#FBBF24"/><circle cx="60" cy="22" r="5.5" fill="#4ADE80"/>
+  <rect x="200" y="12" width="240" height="20" rx="10" fill="#0F1B1E"/>
+  <rect x="214" y="19" width="120" height="6" rx="3" fill="#2F4B50"/>
+
+  <rect x="24" y="62" width="280" height="158" rx="12" fill="url(#thumb)"/>
+  <circle cx="164" cy="141" r="26" fill="#fff" fill-opacity=".92"/>
+  <path d="M156 128v26l22-13Z" fill="#0E7490"/>
+  <rect x="24" y="206" width="280" height="14" fill="#000" fill-opacity=".25"/>
+  <rect x="24" y="211" width="168" height="4" rx="2" fill="url(#glow)"/>
+  <rect x="24" y="234" width="210" height="10" rx="5" fill="#E3F1EF" fill-opacity=".85"/>
+  <rect x="24" y="252" width="130" height="8" rx="4" fill="#93ABA8" fill-opacity=".6"/>
+
+  <g font-family="DM Sans, Segoe UI, sans-serif" font-size="11" font-weight="600">
+    <circle cx="36" cy="290" r="11" fill="#2DD4BF"/><path d="M31 290l3.5 3.5 6.5-7" stroke="#042F2E" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="47" y="289" width="36" height="2" fill="#2DD4BF"/>
+    <circle cx="94" cy="290" r="11" fill="#2DD4BF"/><path d="M89 290l3.5 3.5 6.5-7" stroke="#042F2E" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="105" y="289" width="36" height="2" fill="#2DD4BF"/>
+    <circle cx="152" cy="290" r="11" fill="#2DD4BF"/><path d="M147 290l3.5 3.5 6.5-7" stroke="#042F2E" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="163" y="289" width="36" height="2" fill="#2DD4BF"/>
+    <circle cx="210" cy="290" r="11" fill="#0F1B1E" stroke="#2DD4BF" stroke-width="2"/><text x="210" y="294" text-anchor="middle" fill="#2DD4BF">4</text>
+    <rect x="221" y="289" width="36" height="2" fill="#2F4B50"/>
+    <circle cx="268" cy="290" r="11" fill="#0F1B1E" stroke="#2F4B50" stroke-width="2"/><text x="268" y="294" text-anchor="middle" fill="#93ABA8">5</text>
+  </g>
+
+  <rect x="24" y="322" width="280" height="94" rx="12" fill="#142427" stroke="#21373B"/>
+  <rect x="150" y="334" width="140" height="22" rx="11" fill="#2DD4BF" fill-opacity=".16"/>
+  <rect x="162" y="342" width="116" height="6" rx="3" fill="#E3F1EF" fill-opacity=".8"/>
+  <rect x="38" y="366" width="190" height="6" rx="3" fill="#E3F1EF" fill-opacity=".7"/>
+  <rect x="38" y="380" width="150" height="6" rx="3" fill="#E3F1EF" fill-opacity=".7"/>
+  <rect x="192" y="377" width="16" height="12" rx="3" fill="#2DD4BF" fill-opacity=".3"/>
+  <rect x="38" y="396" width="60" height="6" rx="3" fill="#93ABA8" fill-opacity=".5"/>
+
+  <rect x="324" y="62" width="292" height="354" rx="12" fill="#142427" stroke="#21373B"/>
+  <g font-family="DM Sans, Segoe UI, sans-serif" font-size="11" font-weight="600">
+    <rect x="336" y="74" width="68" height="24" rx="12" fill="#2DD4BF" fill-opacity=".16"/>
+    <text x="370" y="90" text-anchor="middle" fill="#2DD4BF">Summary</text>
+    <text x="440" y="90" text-anchor="middle" fill="#93ABA8">Actions</text>
+    <text x="508" y="90" text-anchor="middle" fill="#93ABA8">Decisions</text>
+    <text x="578" y="90" text-anchor="middle" fill="#93ABA8">Ask</text>
+  </g>
+  <rect x="336" y="108" width="268" height="1" fill="#21373B"/>
+  <rect x="340" y="124" width="120" height="10" rx="5" fill="#2DD4BF"/>
+  <rect x="340" y="146" width="250" height="6" rx="3" fill="#E3F1EF" fill-opacity=".75"/>
+  <rect x="340" y="160" width="232" height="6" rx="3" fill="#E3F1EF" fill-opacity=".75"/>
+  <rect x="340" y="174" width="180" height="6" rx="3" fill="#E3F1EF" fill-opacity=".75"/>
+  <rect x="340" y="200" width="90" height="9" rx="4.5" fill="#2DD4BF" fill-opacity=".8"/>
+  <g fill="#E3F1EF" fill-opacity=".65">
+    <circle cx="345" cy="227" r="3" fill="#2DD4BF" fill-opacity="1"/><rect x="356" y="224" width="200" height="6" rx="3"/>
+    <circle cx="345" cy="245" r="3" fill="#2DD4BF" fill-opacity="1"/><rect x="356" y="242" width="170" height="6" rx="3"/>
+    <circle cx="345" cy="263" r="3" fill="#2DD4BF" fill-opacity="1"/><rect x="356" y="260" width="214" height="6" rx="3"/>
+    <circle cx="345" cy="281" r="3" fill="#2DD4BF" fill-opacity="1"/><rect x="356" y="278" width="150" height="6" rx="3"/>
+  </g>
+  <rect x="340" y="306" width="110" height="9" rx="4.5" fill="#2DD4BF" fill-opacity=".8"/>
+  <rect x="340" y="326" width="246" height="6" rx="3" fill="#E3F1EF" fill-opacity=".6"/>
+  <rect x="340" y="340" width="222" height="6" rx="3" fill="#E3F1EF" fill-opacity=".6"/>
+  <rect x="340" y="354" width="140" height="6" rx="3" fill="#E3F1EF" fill-opacity=".6"/>
+  <rect x="340" y="382" width="76" height="22" rx="11" fill="none" stroke="#2F4B50"/>
+  <rect x="424" y="382" width="54" height="22" rx="11" fill="none" stroke="#2F4B50"/>
+  <rect x="352" y="390" width="52" height="6" rx="3" fill="#93ABA8" fill-opacity=".6"/>
+  <rect x="436" y="390" width="30" height="6" rx="3" fill="#93ABA8" fill-opacity=".6"/>
+</svg>

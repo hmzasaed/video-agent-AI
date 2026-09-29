@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 320" role="img" aria-labelledby="pt pd">
+  <title id="pt">Where your data goes</title>
+  <desc id="pd">Audio is downloaded and transcribed on your own machine. Only the transcript text is sent to Gemini for summarizing.</desc>
+  <g font-family="DM Sans, Segoe UI, sans-serif" font-size="13" font-weight="600">
+    <rect x="12" y="24" width="300" height="272" rx="18" fill="#2DD4BF" fill-opacity=".08" stroke="#2DD4BF" stroke-opacity=".55" stroke-width="2" stroke-dasharray="7 6"/>
+    <text x="32" y="54" fill="#2DD4BF">Your machine</text>
+
+    <rect x="36" y="78" width="112" height="84" rx="14" fill="#0F1B1E" stroke="#2F4B50" stroke-width="1.5"/>
+    <g stroke="#2DD4BF" stroke-width="4" stroke-linecap="round">
+      <path d="M62 112v16M74 104v32M86 96v48M98 106v28M110 100v40M122 112v16"/>
+    </g>
+    <text x="92" y="182" text-anchor="middle" fill="#93ABA8" font-weight="500">Audio</text>
+
+    <rect x="176" y="78" width="112" height="84" rx="14" fill="#0F1B1E" stroke="#2F4B50" stroke-width="1.5"/>
+    <g fill="#E3F1EF" fill-opacity=".75">
+      <rect x="196" y="100" width="72" height="6" rx="3"/><rect x="196" y="114" width="60" height="6" rx="3"/>
+      <rect x="196" y="128" width="68" height="6" rx="3"/><rect x="196" y="142" width="44" height="6" rx="3"/>
+    </g>
+    <text x="232" y="182" text-anchor="middle" fill="#93ABA8" font-weight="500">Whisper transcript</text>
+    <path d="M150 120h22" stroke="#2DD4BF" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M166 114l7 6-7 6" stroke="#2DD4BF" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="36" y="206" width="252" height="64" rx="14" fill="#0F1B1E" stroke="#2F4B50" stroke-width="1.5"/>
+    <g fill="#2DD4BF">
+      <circle cx="64" cy="238" r="5"/><circle cx="82" cy="228" r="4" fill-opacity=".6"/><circle cx="84" cy="248" r="4" fill-opacity=".8"/><circle cx="100" cy="236" r="5" fill-opacity=".5"/>
+    </g>
+    <text x="118" y="234" fill="#E3F1EF">Local search index</text>
+    <text x="118" y="252" fill="#93ABA8" font-weight="500" font-size="12">Embeddings stay on disk</text>
+
+    <rect x="360" y="96" width="148" height="92" rx="18" fill="#0F1B1E" stroke="#FB923C" stroke-opacity=".7" stroke-width="1.5"/>
+    <path d="M404 140a14 14 0 0 1 27-5 11 11 0 1 1 3 21h-28a10 10 0 0 1-2-16Z" fill="none" stroke="#FB923C" stroke-width="2.5" stroke-linejoin="round"/>
+    <text x="434" y="176" text-anchor="middle" fill="#E3F1EF">Gemini</text>
+    <path d="M290 120h64" stroke="#FB923C" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="2 7"/>
+    <path d="M348 114l7 6-7 6" stroke="#FB923C" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="434" y="214" text-anchor="middle" fill="#93ABA8" font-weight="500" font-size="12">Text only.</text>
+    <text x="434" y="231" text-anchor="middle" fill="#93ABA8" font-weight="500" font-size="12">Never your audio.</text>
+  </g>
+</svg>

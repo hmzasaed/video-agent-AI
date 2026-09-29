@@ -4,135 +4,547 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Summarize any YouTube video into a detailed report with action items, decisions, and a full transcript.">
+    <meta name="theme-color" content="#0a1214">
     <title>AI Video Assistant</title>
+    <script>
+        /* Apply the saved (or system) theme before first paint to avoid a flash. */
+        (function () {
+            var theme = null;
+            try { theme = JSON.parse(localStorage.getItem("theme")); } catch (e) {}
+            if (theme !== "light" && theme !== "dark") {
+                theme = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+            }
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.classList.add("js");
+        })();
+    </script>
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" sizes="48x48">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Grotesk:wght@500;600;700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <div class="topbar">
-            <button id="themeToggle" class="theme-toggle" type="button">☀️ Light</button>
-        </div>
+    <!-- Icon sprite (Lucide, ISC licence) -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m10 8 6 4-6 4Z"/></symbol>
+        <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"/><path d="m9 12 2 2 4-4"/></symbol>
+        <symbol id="i-download-cloud" viewBox="0 0 24 24"><path d="M12 13v8m-4-4 4 4 4-4"/><path d="M4.39 15.61A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/></symbol>
+        <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></symbol>
+        <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5a2 2 0 0 0 1.44 1.44l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0Z"/><path d="M20 3v4m2-2h-4"/></symbol>
+        <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+        <symbol id="i-summary" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8m8 4H8m2-8H8"/></symbol>
+        <symbol id="i-actions" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8m-8 6h8m-8 6h8"/></symbol>
+        <symbol id="i-decisions" viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+        <symbol id="i-questions" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+        <symbol id="i-transcript" viewBox="0 0 24 24"><path d="M21 6H3m18 6H3m14 6H3"/></symbol>
+        <symbol id="i-ask" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+        <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5M9 18h6m-5 4h4"/></symbol>
+        <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+        <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+        <symbol id="i-grad" viewBox="0 0 24 24"><path d="M21.42 10.92a1 1 0 0 0-.02-1.84L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.83l8.57 3.91a2 2 0 0 0 1.66 0Z"/><path d="M22 10v6M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></symbol>
+        <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></symbol>
+        <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></symbol>
+        <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    </svg>
 
-        <header>
-            <h1>🎥 AI Video Assistant</h1>
-            <p class="subtitle">
-                Paste a YouTube link and get a detailed summary, action items, decisions,
-                questions, and the full transcript.
-            </p>
-        </header>
+    <a class="skip-link" href="#app">Skip to the analyzer</a>
 
-        <!-- ── Input ───────────────────────────────────────────── -->
-        <section class="card" aria-label="Analyze a video">
-            <div class="input-group">
-                <label class="visually-hidden" for="videoUrl">Video URL or file path</label>
-                <input
-                    type="text"
-                    id="videoUrl"
-                    placeholder="https://www.youtube.com/watch?v=..."
-                    autocomplete="off"
-                    spellcheck="false">
-                <button id="analyzeBtn" class="btn-primary" type="button">Analyze</button>
-            </div>
+    <!-- ── Navigation ─────────────────────────────────────────── -->
+    <header class="nav" id="nav">
+        <div class="nav-inner">
+            <a class="brand" href="#top" aria-label="AI Video Assistant, back to top">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="" width="34" height="34">
+                <span>AI Video Assistant</span>
+            </a>
 
-            <p class="hint">
-                A local audio or video file path works too. Long videos take several
-                minutes — audio is transcribed locally with Whisper.
-                Press <kbd>Ctrl</kbd>+<kbd>K</kbd> to jump back to this box.
-            </p>
-
-            <div id="errorMessage" class="alert" role="alert"></div>
-
-            <div id="recent" class="recent">
-                <div class="recent-head">
-                    <span>Recent</span>
-                    <button id="clearRecent" class="btn-ghost" type="button">Clear</button>
-                </div>
-                <div id="recentList" class="recent-list"></div>
-            </div>
-        </section>
-
-        <!-- ── Progress ────────────────────────────────────────── -->
-        <section id="progressCard" class="card" aria-label="Analysis progress">
-            <div id="videoMeta" class="meta">
-                <img id="metaThumb" src="" alt="">
-                <div>
-                    <div id="metaTitle" class="meta-title"></div>
-                    <div id="metaSub" class="meta-sub"></div>
-                </div>
-            </div>
-
-            <div class="progress-head">
-                <div class="spinner" aria-hidden="true"></div>
-                <span id="progressMessage" role="status" aria-live="polite">Starting...</span>
-                <div class="progress-meta">
-                    <span id="percentLabel">0%</span>
-                    <span id="elapsed">00:00</span>
-                    <button id="cancelBtn" class="btn-danger" type="button">Cancel</button>
-                </div>
-            </div>
-
-            <div class="progress-track"
-                 role="progressbar"
-                 aria-valuemin="0"
-                 aria-valuemax="100"
-                 aria-labelledby="progressMessage">
-                <div id="progressFill" class="progress-fill"></div>
-            </div>
-
-            <ul class="steps">
-                <li id="step-download">1 · Download audio</li>
-                <li id="step-transcribe">2 · Transcribe</li>
-                <li id="step-summarize">3 · Summarize</li>
-                <li id="step-extract">4 · Extract insights</li>
-            </ul>
-        </section>
-
-        <!-- ── Results ─────────────────────────────────────────── -->
-        <section id="results" class="card" aria-label="Analysis results">
-            <nav class="tabs" role="tablist" aria-label="Result sections">
-                <button class="tab" role="tab" data-tab="summary"
-                        aria-selected="true" aria-controls="panel-summary"
-                        type="button">📝 Summary</button>
-                <button class="tab" role="tab" data-tab="actions"
-                        aria-selected="false" aria-controls="panel-actions"
-                        tabindex="-1" type="button">✅ Action Items</button>
-                <button class="tab" role="tab" data-tab="decisions"
-                        aria-selected="false" aria-controls="panel-decisions"
-                        tabindex="-1" type="button">⚖️ Decisions</button>
-                <button class="tab" role="tab" data-tab="questions"
-                        aria-selected="false" aria-controls="panel-questions"
-                        tabindex="-1" type="button">❓ Questions</button>
-                <button class="tab" role="tab" data-tab="transcript"
-                        aria-selected="false" aria-controls="panel-transcript"
-                        tabindex="-1" type="button">📜 Transcript</button>
+            <nav class="nav-links" id="navLinks" aria-label="Main">
+                <a href="#how">How it works</a>
+                <a href="#features">Features</a>
+                <a href="#privacy">Privacy</a>
+                <a href="#faq">FAQ</a>
             </nav>
 
-            <div class="panel-toolbar">
-                <span id="panelStats" class="panel-stats"></span>
-                <button id="copyBtn" class="btn-ghost" type="button">Copy</button>
-                <button id="downloadMdBtn" class="btn-ghost" type="button">.md</button>
-                <button id="downloadTxtBtn" class="btn-ghost" type="button">.txt</button>
+            <div class="nav-actions">
+                <button id="themeToggle" class="btn-icon" type="button" aria-label="Switch to light theme">
+                    <svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg>
+                </button>
+                <a class="btn-primary btn-sm nav-cta" href="#app">Try it now</a>
+                <button id="menuToggle" class="btn-icon menu-toggle" type="button"
+                        aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
+                    <svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="top">
+        <!-- ── Hero ──────────────────────────────────────────── -->
+        <section class="hero">
+            <div class="hero-bg" aria-hidden="true">
+                <span class="blob blob-1"></span>
+                <span class="blob blob-2"></span>
+                <span class="grid-lines"></span>
             </div>
 
-            <div id="panel-summary" class="panel active" role="tabpanel"></div>
-            <div id="panel-actions" class="panel" role="tabpanel"></div>
-            <div id="panel-decisions" class="panel" role="tabpanel"></div>
-            <div id="panel-questions" class="panel" role="tabpanel"></div>
-
-            <div id="panel-transcript" class="panel" role="tabpanel">
-                <div class="transcript-tools">
-                    <label class="visually-hidden" for="transcriptSearch">Search transcript</label>
-                    <input type="search" id="transcriptSearch"
-                           placeholder="Search the transcript..." autocomplete="off">
-                    <span id="searchCount" aria-live="polite"></span>
+            <div class="wrap hero-grid">
+                <div class="hero-copy">
+                    <p class="eyebrow reveal">
+                        <svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg>
+                        Whisper · Gemini · Chroma
+                    </p>
+                    <h1 class="reveal" style="--i:1">
+                        Turn any video into <span class="text-grad">notes you can act on</span>
+                    </h1>
+                    <p class="lead reveal" style="--i:2">
+                        Paste a YouTube link and get a detailed summary, action items, decisions,
+                        open questions, and a searchable transcript. Then ask it anything, with
+                        answers cited back to the video.
+                    </p>
+                    <div class="hero-ctas reveal" style="--i:3">
+                        <a class="btn-primary btn-lg" href="#app">
+                            Analyze a video
+                            <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
+                        </a>
+                        <a class="btn-secondary btn-lg" href="#how">
+                            <svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>
+                            See how it works
+                        </a>
+                    </div>
+                    <ul class="hero-points reveal" style="--i:4">
+                        <li><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Audio stays on your machine</li>
+                        <li><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg>Live progress, cancel anytime</li>
+                    </ul>
                 </div>
-                <div id="transcriptText" class="transcript-text"></div>
+
+                <div class="hero-visual reveal" style="--i:2">
+                    <img src="{{ url_for('static', filename='img/hero-mockup.svg') }}"
+                         alt="Preview of the app: a video next to its generated summary, action items and a cited answer"
+                         width="640" height="440" fetchpriority="high">
+                    <div class="float-card float-a" aria-hidden="true">
+                        <svg class="icon" aria-hidden="true"><use href="#i-actions"/></svg>
+                        <div><strong>6 action items</strong><span>with owners</span></div>
+                    </div>
+                    <div class="float-card float-b" aria-hidden="true">
+                        <svg class="icon" aria-hidden="true"><use href="#i-ask"/></svg>
+                        <div><strong>Cited answers</strong><span>[1] [2] from the video</span></div>
+                    </div>
+                </div>
             </div>
         </section>
-    </div>
+
+        <!-- ── Works with strip ──────────────────────────────── -->
+        <section class="strip" aria-label="Supported inputs and building blocks">
+            <div class="wrap strip-inner">
+                <span class="strip-label">Works with</span>
+                <ul class="strip-list">
+                    <li>YouTube links</li>
+                    <li>Local audio &amp; video files</li>
+                    <li>Whisper, running locally</li>
+                    <li>Gemini summaries</li>
+                    <li>Chroma vector search</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- ── App ───────────────────────────────────────────── -->
+        <section id="app" class="section app-section" aria-labelledby="app-title">
+            <div class="wrap wrap-narrow">
+                <div class="section-head reveal">
+                    <p class="kicker">The analyzer</p>
+                    <h2 id="app-title">Paste a link. Get the whole picture.</h2>
+                    <p>Long videos take a few minutes. You can watch every step as it runs.</p>
+                </div>
+
+                <!-- Input -->
+                <div class="card card-input reveal" style="--i:1" role="region" aria-label="Analyze a video">
+                    <div class="input-group">
+                        <label class="visually-hidden" for="videoUrl">Video URL or file path</label>
+                        <div class="field">
+                            <svg class="icon field-icon" aria-hidden="true"><use href="#i-link"/></svg>
+                            <input
+                                type="text"
+                                id="videoUrl"
+                                placeholder="https://www.youtube.com/watch?v=..."
+                                autocomplete="off"
+                                spellcheck="false">
+                        </div>
+                        <button id="analyzeBtn" class="btn-primary" type="button">Analyze</button>
+                    </div>
+
+                    <div class="hint-row">
+                        <span class="chip">
+                            <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                            Audio is transcribed locally with Whisper
+                        </span>
+                        <p class="hint">
+                            A local file path works too. <kbd>Ctrl</kbd>+<kbd>K</kbd> focuses this box.
+                        </p>
+                    </div>
+
+                    <div id="errorMessage" class="alert" role="alert"></div>
+
+                    <div id="recent" class="recent">
+                        <div class="recent-head">
+                            <span>Recent</span>
+                            <button id="clearRecent" class="btn-text" type="button">Clear</button>
+                        </div>
+                        <div id="recentList" class="recent-list"></div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div id="progressCard" class="card" role="region" aria-label="Analysis progress">
+                    <div id="videoMeta" class="meta">
+                        <img id="metaThumb" src="" alt="" width="128" height="72">
+                        <div>
+                            <div id="metaTitle" class="meta-title"></div>
+                            <div id="metaSub" class="meta-sub"></div>
+                        </div>
+                    </div>
+
+                    <div class="progress-head">
+                        <div class="spinner" aria-hidden="true"></div>
+                        <span id="progressMessage" role="status" aria-live="polite">Starting...</span>
+                        <div class="progress-meta">
+                            <span id="percentLabel">0%</span>
+                            <span class="elapsed">
+                                <svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>
+                                <span id="elapsed">00:00</span>
+                            </span>
+                            <button id="cancelBtn" class="btn-danger" type="button">Cancel</button>
+                        </div>
+                    </div>
+
+                    <div class="progress-track"
+                         role="progressbar"
+                         aria-valuemin="0"
+                         aria-valuemax="100"
+                         aria-labelledby="progressMessage">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+
+                    <ol class="steps">
+                        <li id="step-download"><span class="step-dot">1</span><span class="step-label">Download</span></li>
+                        <li id="step-transcribe"><span class="step-dot">2</span><span class="step-label">Transcribe</span></li>
+                        <li id="step-summarize"><span class="step-dot">3</span><span class="step-label">Summarize</span></li>
+                        <li id="step-extract"><span class="step-dot">4</span><span class="step-label">Extract</span></li>
+                        <li id="step-index"><span class="step-dot">5</span><span class="step-label">Index</span></li>
+                    </ol>
+                </div>
+
+                <!-- Results -->
+                <div id="results" class="card" role="region" aria-label="Analysis results">
+                    <nav class="tabs" role="tablist" aria-label="Result sections">
+                        <button class="tab" role="tab" data-tab="summary"
+                                aria-selected="true" aria-controls="panel-summary" type="button">
+                            <svg class="icon" aria-hidden="true"><use href="#i-summary"/></svg>Summary</button>
+                        <button class="tab" role="tab" data-tab="actions"
+                                aria-selected="false" aria-controls="panel-actions" tabindex="-1" type="button">
+                            <svg class="icon" aria-hidden="true"><use href="#i-actions"/></svg>Action items</button>
+                        <button class="tab" role="tab" data-tab="decisions"
+                                aria-selected="false" aria-controls="panel-decisions" tabindex="-1" type="button">
+                            <svg class="icon" aria-hidden="true"><use href="#i-decisions"/></svg>Decisions</button>
+                        <button class="tab" role="tab" data-tab="questions"
+                                aria-selected="false" aria-controls="panel-questions" tabindex="-1" type="button">
+                            <svg class="icon" aria-hidden="true"><use href="#i-questions"/></svg>Questions</button>
+                        <button class="tab" role="tab" data-tab="transcript"
+                                aria-selected="false" aria-controls="panel-transcript" tabindex="-1" type="button">
+                            <svg class="icon" aria-hidden="true"><use href="#i-transcript"/></svg>Transcript</button>
+                        <button class="tab" role="tab" data-tab="ask"
+                                aria-selected="false" aria-controls="panel-ask" tabindex="-1" type="button">
+                            <svg class="icon" aria-hidden="true"><use href="#i-ask"/></svg>Ask</button>
+                    </nav>
+
+                    <div class="panel-toolbar">
+                        <span id="panelStats" class="panel-stats"></span>
+                        <div class="toolbar-actions">
+                            <button id="copyBtn" class="btn-ghost" type="button">
+                                <svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>Copy</button>
+                            <button id="downloadMdBtn" class="btn-ghost" type="button" aria-label="Download report as Markdown">
+                                <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>.md</button>
+                            <button id="downloadTxtBtn" class="btn-ghost" type="button" aria-label="Download report as plain text">
+                                <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>.txt</button>
+                        </div>
+                    </div>
+
+                    <div id="panel-summary" class="panel active" role="tabpanel"></div>
+                    <div id="panel-actions" class="panel" role="tabpanel"></div>
+                    <div id="panel-decisions" class="panel" role="tabpanel"></div>
+                    <div id="panel-questions" class="panel" role="tabpanel"></div>
+
+                    <div id="panel-transcript" class="panel" role="tabpanel">
+                        <div class="transcript-tools">
+                            <label class="visually-hidden" for="transcriptSearch">Search transcript</label>
+                            <div class="field field-sm">
+                                <svg class="icon field-icon" aria-hidden="true"><use href="#i-search"/></svg>
+                                <input type="search" id="transcriptSearch"
+                                       placeholder="Search the transcript..." autocomplete="off">
+                            </div>
+                            <span id="searchCount" aria-live="polite"></span>
+                        </div>
+                        <div id="transcriptText" class="transcript-text"></div>
+                    </div>
+
+                    <div id="panel-ask" class="panel" role="tabpanel">
+                        <div id="askNotice" class="ask-notice"></div>
+                        <div id="chatLog" class="chat-log" aria-live="polite"></div>
+                        <div id="askSuggestions" class="ask-suggestions">
+                            <button class="suggestion" type="button">What are the main takeaways?</button>
+                            <button class="suggestion" type="button">Who is responsible for what?</button>
+                            <button class="suggestion" type="button">What numbers or dates were mentioned?</button>
+                            <button class="suggestion" type="button">What questions were left open?</button>
+                        </div>
+                        <form id="askForm" class="ask-form" autocomplete="off">
+                            <label class="visually-hidden" for="askInput">Ask a question about this video</label>
+                            <input type="text" id="askInput" maxlength="1000"
+                                   placeholder="Ask anything about this video...">
+                            <button id="askBtn" class="btn-primary" type="submit">Ask</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── How it works ──────────────────────────────────── -->
+        <section id="how" class="section section-alt" aria-labelledby="how-title">
+            <div class="wrap">
+                <div class="section-head reveal">
+                    <p class="kicker">How it works</p>
+                    <h2 id="how-title">Five steps, from link to answers</h2>
+                    <p>A background job runs each step and reports progress as it goes, so the page never freezes.</p>
+                </div>
+
+                <ol class="how-list">
+                    <li class="how-item reveal" style="--i:0">
+                        <span class="how-num">01</span>
+                        <span class="how-icon"><svg class="icon" aria-hidden="true"><use href="#i-download-cloud"/></svg></span>
+                        <h3>Download</h3>
+                        <p>yt-dlp fetches the audio and splits it into 10-minute chunks.</p>
+                    </li>
+                    <li class="how-item reveal" style="--i:1">
+                        <span class="how-num">02</span>
+                        <span class="how-icon"><svg class="icon" aria-hidden="true"><use href="#i-mic"/></svg></span>
+                        <h3>Transcribe</h3>
+                        <p>Whisper turns each chunk into text on your own machine.</p>
+                    </li>
+                    <li class="how-item reveal" style="--i:2">
+                        <span class="how-num">03</span>
+                        <span class="how-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg></span>
+                        <h3>Summarize</h3>
+                        <p>Gemini writes a structured summary that scales with the video's length.</p>
+                    </li>
+                    <li class="how-item reveal" style="--i:3">
+                        <span class="how-num">04</span>
+                        <span class="how-icon"><svg class="icon" aria-hidden="true"><use href="#i-actions"/></svg></span>
+                        <h3>Extract</h3>
+                        <p>Action items, decisions, and open questions are pulled into their own lists.</p>
+                    </li>
+                    <li class="how-item reveal" style="--i:4">
+                        <span class="how-num">05</span>
+                        <span class="how-icon"><svg class="icon" aria-hidden="true"><use href="#i-database"/></svg></span>
+                        <h3>Index</h3>
+                        <p>Everything is embedded into a local Chroma store, ready for questions.</p>
+                    </li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- ── Features ──────────────────────────────────────── -->
+        <section id="features" class="section" aria-labelledby="features-title">
+            <div class="wrap">
+                <div class="section-head reveal">
+                    <p class="kicker">Features</p>
+                    <h2 id="features-title">Everything you'd write down, already written</h2>
+                    <p>Each result gets its own tab, and you can copy or export any of it.</p>
+                </div>
+
+                <div class="bento">
+                    <article class="tile tile-wide reveal" style="--i:0">
+                        <span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-summary"/></svg></span>
+                        <h3>Detailed summaries</h3>
+                        <p>Section-by-section notes combined into one readable report, not a two-line blurb.</p>
+                        <div class="tile-art" aria-hidden="true">
+                            <span style="--w:92%"></span><span style="--w:78%"></span><span style="--w:85%"></span><span style="--w:54%"></span>
+                        </div>
+                    </article>
+                    <article class="tile reveal" style="--i:1">
+                        <span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-actions"/></svg></span>
+                        <h3>Action items</h3>
+                        <p>Who does what, pulled out and listed.</p>
+                    </article>
+                    <article class="tile reveal" style="--i:2">
+                        <span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-decisions"/></svg></span>
+                        <h3>Decisions</h3>
+                        <p>What was agreed, so nobody has to rewatch.</p>
+                    </article>
+                    <article class="tile reveal" style="--i:3">
+                        <span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-questions"/></svg></span>
+                        <h3>Open questions</h3>
+                        <p>What's still unresolved, ready for follow-up.</p>
+                    </article>
+                    <article class="tile reveal" style="--i:4">
+                        <span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg></span>
+                        <h3>Searchable transcript</h3>
+                        <p>Find any phrase with instant highlighting.</p>
+                    </article>
+                    <article class="tile tile-wide tile-accent reveal" style="--i:5">
+                        <span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-ask"/></svg></span>
+                        <h3>Ask the video</h3>
+                        <p>Ask follow-up questions and get answers with numbered citations to the exact passages they came from.</p>
+                        <div class="tile-chat" aria-hidden="true">
+                            <span class="q">Who owns the launch plan?</span>
+                            <span class="a">Alex is drafting it <sup>[1]</sup></span>
+                        </div>
+                    </article>
+                    <article class="tile tile-wide reveal" style="--i:6">
+                        <span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg></span>
+                        <h3>Live progress, cancel anytime</h3>
+                        <p>Watch each stage and every audio chunk as it's processed, with elapsed time and a cancel button that stops at the next chunk.</p>
+                    </article>
+                    <article class="tile tile-wide reveal" style="--i:7">
+                        <span class="tile-icon"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg></span>
+                        <h3>Export anywhere</h3>
+                        <p>Copy any section, or download the full report, including your Q&amp;A, as Markdown or plain text.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Use cases ─────────────────────────────────────── -->
+        <section class="section section-alt" aria-labelledby="uses-title">
+            <div class="wrap">
+                <div class="section-head reveal">
+                    <p class="kicker">Made for</p>
+                    <h2 id="uses-title">Any video worth remembering</h2>
+                </div>
+                <div class="uses">
+                    <div class="use reveal" style="--i:0">
+                        <svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>
+                        <h3>Meetings</h3>
+                        <p>Recorded calls become minutes with owners and deadlines.</p>
+                    </div>
+                    <div class="use reveal" style="--i:1">
+                        <svg class="icon" aria-hidden="true"><use href="#i-grad"/></svg>
+                        <h3>Lectures</h3>
+                        <p>Study notes and a transcript you can search before the exam.</p>
+                    </div>
+                    <div class="use reveal" style="--i:2">
+                        <svg class="icon" aria-hidden="true"><use href="#i-headphones"/></svg>
+                        <h3>Podcasts</h3>
+                        <p>The key ideas from a two-hour episode, in five minutes.</p>
+                    </div>
+                    <div class="use reveal" style="--i:3">
+                        <svg class="icon" aria-hidden="true"><use href="#i-wrench"/></svg>
+                        <h3>Tutorials</h3>
+                        <p>Step-by-step instructions without scrubbing back and forth.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Privacy ───────────────────────────────────────── -->
+        <section id="privacy" class="section" aria-labelledby="privacy-title">
+            <div class="wrap split">
+                <div class="split-copy reveal">
+                    <p class="kicker">Privacy</p>
+                    <h2 id="privacy-title">Your audio never leaves your machine</h2>
+                    <p>
+                        Downloading, transcription, and the search index all run locally.
+                        Only the transcript text is sent to Gemini to write the summary
+                        and answer questions.
+                    </p>
+                    <ul class="checks">
+                        <li><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Whisper runs on your own CPU or GPU</li>
+                        <li><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Embeddings are stored on local disk</li>
+                        <li><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Your API key stays in your own <code>.env</code> file</li>
+                    </ul>
+                </div>
+                <div class="split-visual reveal" style="--i:1">
+                    <img src="{{ url_for('static', filename='img/privacy.svg') }}"
+                         alt="Diagram: audio and the Whisper transcript stay on your machine; only text goes to Gemini"
+                         width="520" height="320" loading="lazy">
+                </div>
+            </div>
+        </section>
+
+        <!-- ── FAQ ───────────────────────────────────────────── -->
+        <section id="faq" class="section section-alt" aria-labelledby="faq-title">
+            <div class="wrap wrap-narrow">
+                <div class="section-head reveal">
+                    <p class="kicker">FAQ</p>
+                    <h2 id="faq-title">Questions, answered</h2>
+                </div>
+                <div class="faq">
+                    <details class="reveal">
+                        <summary>How long does an analysis take?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+                        <p>It depends on the video's length and your hardware. Transcription is the slowest step. A one-hour video usually takes several minutes, and the progress bar shows each chunk as it finishes.</p>
+                    </details>
+                    <details class="reveal">
+                        <summary>Can I use files instead of YouTube links?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+                        <p>Yes. Paste the path to a local audio or video file on the machine running the server.</p>
+                    </details>
+                    <details class="reveal">
+                        <summary>What do I need to run it?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+                        <p>Python 3.10 or newer, FFmpeg on your <code>PATH</code>, and a Google AI Studio API key in your <code>.env</code> file. The README has the full setup.</p>
+                    </details>
+                    <details class="reveal">
+                        <summary>Why can't it open some videos?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+                        <p>Private, age-restricted, or region-locked videos can't be downloaded. The error message explains what went wrong and how to fix it.</p>
+                    </details>
+                    <details class="reveal">
+                        <summary>Where do answers in the Ask tab come from?<svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+                        <p>Only from this video. The most relevant passages are retrieved from the local index, and each answer lists them as numbered sources you can expand.</p>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── CTA ───────────────────────────────────────────── -->
+        <section class="cta-band" aria-labelledby="cta-title">
+            <div class="wrap cta-inner reveal">
+                <h2 id="cta-title">Got a video you've been meaning to watch?</h2>
+                <p>Get the summary first. Paste the link and see what's in it.</p>
+                <a class="btn-primary btn-lg" href="#app">
+                    Analyze a video
+                    <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="wrap footer-inner">
+            <a class="brand" href="#top">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="" width="28" height="28">
+                <span>AI Video Assistant</span>
+            </a>
+            <nav class="footer-links" aria-label="Footer">
+                <a href="#how">How it works</a>
+                <a href="#features">Features</a>
+                <a href="#privacy">Privacy</a>
+                <a href="#faq">FAQ</a>
+            </nav>
+            <p class="footer-note">Transcribed locally with Whisper. Summarized with Gemini.</p>
+        </div>
+    </footer>
 
     <div id="toast" role="status" aria-live="polite"></div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/site.js') }}"></script>
 </body>
 </html>

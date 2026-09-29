@@ -243,3 +243,63 @@ the previous hard-coded values as defaults.
 never taken effect — `transcribe_all` was always called with its default. This
 decision made an existing setting real, which is itself a reason to surface
 effective configuration on the health endpoint.
+
+---
+
+## ADR-011 — Local vector index for Q&A
+
+**Status:** Accepted
+
+**Context.** Users want to ask follow-up questions ("who owns the launch
+plan?") without re-reading the transcript. Pasting the whole transcript into
+every prompt breaks on long videos and costs a full transcript of tokens per
+question.
+
+**Decision.** Retrieval-augmented generation. After extraction, the transcript
+and generated sections are chunked and embedded into a **persistent local
+Chroma collection** (`data/chroma/`) using Chroma's built-in ONNX
+all-MiniLM-L6-v2. Each question retrieves the top six chunks for that job only,
+and Gemini answers from them with numbered citations.
+
+**Consequences.**
+
+- Embeddings run locally with no API key and no PyTorch; the model downloads
+  once (~80 MB).
+- Only the question and a handful of excerpts go to Gemini per question.
+- The index is on disk, so Q&A survives job pruning and server restarts.
+- Indexing is a fifth stage that **cannot fail the job** — on error the results
+  are still delivered with `qa_ready: false` and a reason.
+- Answers are refused, not guessed, when the excerpts don't contain the answer.
+
+**Rejected.** A hosted embedding API (another key, and sends every chunk to a
+third party); `sentence-transformers` (pulls in PyTorch at import, which broke
+startup where PyTorch DLLs are blocked); stuffing the full transcript into each
+prompt (fails on long videos, expensive per question).
+
+---
+
+## ADR-012 — Landing page and analyzer on one page
+
+**Status:** Accepted
+
+**Context.** The project is published on GitHub and demoed to others. A bare
+tool page gave no sense of what the app does before running a multi-minute
+job.
+
+**Decision.** One page: a landing site (hero, how it works, features, use
+cases, privacy, FAQ) with the working analyzer directly under the hero. Still
+no framework and no build step; landing behaviour lives in a separate
+`site.js` so `main.js` stays testable.
+
+**Consequences.**
+
+- Every call to action scrolls to the analyzer; nothing blocks the core task.
+- Content is honest by rule — no invented testimonials, stats, or logos.
+- Heading and body fonts load from Google Fonts, a new outbound request,
+  documented in [SECURITY.md](SECURITY.md) with a system-font fallback.
+- Scroll reveals hide content only when JavaScript runs, and reduced-motion
+  shows everything immediately.
+
+**Rejected.** A separate `/app` route (splits the experience and duplicates
+the header/theme logic for little gain); a CSS framework such as Tailwind
+(adds a build step, contradicting [ADR-007](#adr-007--no-frontend-framework-and-no-build-step)).

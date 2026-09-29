@@ -1,12 +1,13 @@
 /* ══════════════════════════════════════════════════════════════
    AI Video Assistant — frontend controller.
-   Starts an analysis job, polls it for progress, renders the results.
+   Starts an analysis job, polls it for progress, renders the results,
+   and answers questions about the video from its Q&A index.
    ══════════════════════════════════════════════════════════════ */
 
 const $ = (id) => document.getElementById(id);
 
 const POLL_INTERVAL_MS = 2000;
-const STAGE_ORDER = ["download", "transcribe", "summarize", "extract"];
+const STAGE_ORDER = ["download", "transcribe", "summarize", "extract", "index"];
 const RECENT_KEY = "recentSources";
 const THEME_KEY = "theme";
 const MAX_RECENT = 6;
@@ -28,6 +29,7 @@ const ERROR_HINTS = [
     [/no such file/i, "Check the file path — the file was not found on the server."],
     [/private|unavailable|sign in|age.?restricted/i, "yt-dlp could not access this video. It may be private, age-restricted, or region-locked."],
     [/no speech was detected/i, "The audio track appears to be silent or music-only."],
+    [/indexing failed|onnx|embedding/i, "The Q&A index could not be built. The embedding model downloads on first use — check your connection and re-run the analysis."],
 ];
 
 let pollTimer = null;
@@ -35,6 +37,8 @@ let elapsedTimer = null;
 let startedAt = 0;
 let latestJob = null;
 let currentJobId = null;
+let chatHistory = [];
+let askBusy = false;
 
 /* ── Storage (may throw in private mode) ───────────────────────── */
 function readStore(key, fallback) {
@@ -116,6 +120,12 @@ function renderMarkdown(text) {
     return html.join("");
 }
 
+/* Turn [1]-style citations in rendered answer HTML into superscript markers. */
+function linkCitations(html) {
+    return html.replace(/\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]/g,
+        (_, ids) => `<sup class="cite">[${ids.replace(/\s+/g, "")}]</sup>`);
+}
+
 /* ── Formatting helpers ────────────────────────────────────────── */
 function formatClock(ms) {
     const total = Math.floor(ms / 1000);
@@ -160,7 +170,10 @@ function showError(message) {
     $("errorMessage").innerHTML =
         `<div class="alert-title">Analysis failed</div>` +
         `<div>${escapeHtml(message)}</div>` +
-        (hint ? `<div class="alert-fix">💡 ${escapeHtml(hint)}</div>` : "");
+        (hint
+            ? `<div class="alert-fix"><svg class="icon" aria-hidden="true"><use href="#i-bulb"/></svg>` +
+              `<span>${escapeHtml(hint)}</span></div>`
+            : "");
     $("errorMessage").classList.add("visible");
 }
 
@@ -389,10 +402,116 @@ function renderResults(job) {
         `${transcriptWords.toLocaleString()} words transcribed` +
         (took ? ` · analyzed in ${formatClock(took * 1000)}` : "");
 
+    resetChat(job);
     selectTab("summary");
     $("results").classList.add("visible");
     $("results").scrollIntoView({ behavior: "smooth", block: "start" });
     toast("Analysis complete");
+}
+
+/* ── Ask (Q&A over the video) ──────────────────────────────────── */
+const SOURCE_LABELS = {
+    summary: "Summary",
+    action_items: "Action items",
+    decisions: "Decisions",
+    questions: "Questions",
+    transcript: "Transcript",
+};
+
+function resetChat(job) {
+    chatHistory = [];
+    $("chatLog").innerHTML = "";
+    $("askSuggestions").style.display = "";
+
+    const ready = Boolean(job.qa_ready);
+    const notice = $("askNotice");
+    notice.textContent = ready
+        ? ""
+        : `Q&A is unavailable for this analysis. ${job.qa_error || ""}`.trim();
+    notice.classList.toggle("visible", !ready);
+    setAskBusy(false, ready);
+}
+
+function setAskBusy(busy, enabled = true) {
+    askBusy = busy;
+    const disabled = busy || !enabled;
+    $("askInput").disabled = disabled;
+    $("askBtn").disabled = disabled;
+    $("askBtn").textContent = busy ? "Thinking..." : "Ask";
+    document.querySelectorAll(".suggestion").forEach((btn) => { btn.disabled = disabled; });
+}
+
+function appendBubble(role, { html = "", text = "", extraClass = "" } = {}) {
+    const bubble = document.createElement("div");
+    bubble.className = `bubble ${role} ${extraClass}`.trim();
+    if (html) bubble.innerHTML = html;
+    else bubble.textContent = text;
+    $("chatLog").appendChild(bubble);
+    bubble.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    return bubble;
+}
+
+function renderSources(sources) {
+    const details = document.createElement("details");
+    details.className = "sources";
+
+    const summary = document.createElement("summary");
+    summary.textContent = `${sources.length} source${sources.length === 1 ? "" : "s"}`;
+    details.appendChild(summary);
+
+    const list = document.createElement("ol");
+    for (const source of sources) {
+        const item = document.createElement("li");
+        item.value = source.id;
+        const tag = document.createElement("span");
+        tag.className = "source-tag";
+        tag.textContent = SOURCE_LABELS[source.section] || source.section;
+        item.append(tag, source.text);
+        list.appendChild(item);
+    }
+    details.appendChild(list);
+    return details;
+}
+
+async function askQuestion(question) {
+    question = (question || "").trim();
+    if (!question || askBusy || !currentJobId) return;
+
+    $("askInput").value = "";
+    $("askSuggestions").style.display = "none";
+    appendBubble("user", { text: question });
+    const pending = appendBubble("assistant", { text: "Searching the video...", extraClass: "pending" });
+    setAskBusy(true);
+
+    try {
+        const response = await fetch(`/api/jobs/${currentJobId}/ask`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question, history: chatHistory }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Could not answer that question.");
+        }
+
+        pending.className = "bubble assistant";
+        pending.innerHTML = linkCitations(renderMarkdown(data.answer));
+        if (data.sources && data.sources.length) {
+            pending.appendChild(renderSources(data.sources));
+        }
+
+        chatHistory.push(
+            { role: "user", content: question },
+            { role: "assistant", content: data.answer },
+        );
+    } catch (error) {
+        const hint = hintFor(error.message);
+        pending.className = "bubble assistant error";
+        pending.textContent = error.message + (hint ? ` — ${hint}` : "");
+    } finally {
+        setAskBusy(false);
+        $("askInput").focus();
+    }
 }
 
 /* ── Tabs (ARIA + arrow-key navigation) ────────────────────────── */
@@ -474,6 +593,14 @@ function buildReport(format) {
         ["Full Transcript", latestJob.transcript],
     ];
 
+    if (chatHistory.length) {
+        const qa = [];
+        for (let i = 0; i + 1 < chatHistory.length; i += 2) {
+            qa.push(`Q: ${chatHistory[i].content}`, `A: ${chatHistory[i + 1].content}`, "");
+        }
+        sections.push(["Q&A", qa.join("\n").trim()]);
+    }
+
     if (format === "md") {
         return [
             `# ${meta.title || "Video Analysis"}`,
@@ -524,8 +651,10 @@ function downloadReport(format) {
 
 /* ── Theme ─────────────────────────────────────────────────────── */
 function applyTheme(theme) {
+    const toggle = $("themeToggle");
     document.documentElement.dataset.theme = theme;
-    $("themeToggle").textContent = theme === "light" ? "🌙 Dark" : "☀️ Light";
+    toggle.querySelector("use").setAttribute("href", theme === "light" ? "#i-moon" : "#i-sun");
+    toggle.setAttribute("aria-label", `Switch to ${theme === "light" ? "dark" : "light"} theme`);
 }
 
 function toggleTheme() {
@@ -536,7 +665,8 @@ function toggleTheme() {
 
 /* ── Wiring ────────────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
-    applyTheme(readStore(THEME_KEY, "dark"));
+    // The inline script in <head> already resolved saved-or-system theme.
+    applyTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
     paintRecent();
 
     $("analyzeBtn").addEventListener("click", startAnalysis);
@@ -565,6 +695,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     $("transcriptSearch").addEventListener("input", searchTranscript);
+
+    $("askForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        askQuestion($("askInput").value);
+    });
+
+    document.querySelectorAll(".suggestion").forEach((btn) => {
+        btn.addEventListener("click", () => askQuestion(btn.textContent));
+    });
 
     document.querySelectorAll(".tab").forEach((tab) => {
         tab.addEventListener("click", () => selectTab(tab.dataset.tab));

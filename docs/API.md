@@ -21,7 +21,10 @@ POST /api/analyze  ──► 202 { job_id }
 GET /api/jobs/<id> ──► 200 { status: "running", percent, message, … }
         │  repeat every ~2s
         ▼
-GET /api/jobs/<id> ──► 200 { status: "done", summary, transcript, … }
+GET /api/jobs/<id> ──► 200 { status: "done", summary, transcript, qa_ready, … }
+        │
+        ▼
+POST /api/jobs/<id>/ask ──► 200 { answer, sources }   (any number of times)
 ```
 
 ---
@@ -111,7 +114,7 @@ bundled frontend uses.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `status` | string | `running` · `done` · `error` · `cancelled` |
-| `stage` | string | `queued` · `download` · `transcribe` · `summarize` · `extract` · `done` · `error` · `cancelled` |
+| `stage` | string | `queued` · `download` · `transcribe` · `summarize` · `extract` · `index` · `done` · `error` · `cancelled` |
 | `message` | string | Human-readable current step, e.g. `Transcribing chunk 2/5...` |
 | `percent` | int | 0–100, weighted by real time per stage |
 | `metadata` | object \| null | Populated during `download`; `null` for local files without metadata |
@@ -120,6 +123,8 @@ bundled frontend uses.
 | `action_items` | string | Markdown, or `No actionable items found.` |
 | `decisions` | string | Markdown, or `No decisions found.` |
 | `questions` | string | Markdown, or `No questions found.` |
+| `qa_ready` | bool | `true` once the results are indexed for `/ask` |
+| `qa_error` | string \| null | Why indexing failed. The job still finishes as `done` |
 | `error` | string \| null | Set only when `status` is `error` |
 | `started_at` / `finished_at` | ISO 8601 | Second precision, server local time |
 
@@ -155,6 +160,56 @@ minutes of audio. The response is `202`, not `200`, for exactly this reason:
 the request is accepted, not completed.
 
 Poll the job until `status` becomes `cancelled` to confirm.
+
+---
+
+## `POST /api/jobs/<job_id>/ask`
+
+Ask a question about a finished analysis. Answers come from the video's
+indexed transcript, summary, action items, decisions, and questions
+(retrieval-augmented generation), with numbered citations.
+
+**Request**
+
+```json
+{
+  "question": "Who owns the refund path?",
+  "history": [
+    { "role": "user", "content": "What was decided?" },
+    { "role": "assistant", "content": "They agreed to ship on Friday [1]." }
+  ]
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `question` | string | yes | Trimmed; at most 1000 characters |
+| `history` | array | no | Earlier turns, oldest first. Only the last 4 exchanges are used |
+
+**Response** `200 OK`
+
+```json
+{
+  "answer": "Sarah owns the refund path rewrite and finishes it by Wednesday [1].",
+  "sources": [
+    { "id": 1, "section": "transcript", "text": "…Sarah owns the refund path…", "score": 0.61 }
+  ]
+}
+```
+
+Each `[n]` in `answer` refers to the source with `id` `n`. `section` is one of
+`summary` · `action_items` · `decisions` · `questions` · `transcript`.
+
+| Code | Body | When |
+| --- | --- | --- |
+| `400` | `{"error": "A question is required."}` | Blank or overlong question |
+| `404` | `{"error": "Unknown job id."}` | No such job and no persisted index |
+| `409` | `{"error": "..."}` | Job still running, or it was not indexed (`qa_ready` is `false`) |
+| `502` | `{"error": "..."}` | Retrieval or the Gemini call failed |
+
+The index is stored on disk in `CHROMA_DIR` (default `data/chroma/`), so a job
+evicted from memory, or from before a server restart, can still be asked about
+by its id.
 
 ---
 

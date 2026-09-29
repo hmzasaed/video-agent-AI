@@ -7,7 +7,7 @@ what you are trying to do.
 | --- | --- |
 | [PRD.md](PRD.md) | Understand what the product does, who it is for, and what counts as done |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Understand how the system is put together and why |
-| [DESIGN.md](DESIGN.md) | Work on the UI — tokens, components, interaction, accessibility |
+| [DESIGN.md](DESIGN.md) | Work on the UI — tokens, landing page, components, motion, accessibility |
 | [API.md](API.md) | Call the backend from your own client |
 | [SETUP.md](SETUP.md) | Get the project running on a new machine |
 | [TESTING.md](TESTING.md) | Run or extend the test suites |
@@ -17,13 +17,14 @@ what you are trying to do.
 | [ROADMAP.md](ROADMAP.md) | See what is planned and what is deliberately out of scope |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Add code to the project |
 
-The top-level [../README.md](../README.md) is the short version: install,
-run, and the shape of the API.
+The top-level [../README.md](../README.md) is the overview: screenshots, the
+end-to-end workflow, install, run, and the shape of the API. Screenshots live
+in [screenshots/](screenshots/).
 
 ## Conventions used in these docs
 
-- **Stage** means one of the four pipeline steps: download, transcribe,
-  summarize, extract.
+- **Stage** means one of the five pipeline steps: download, transcribe,
+  summarize, extract, index.
 - **Job** means one analysis run, identified by a `job_id`.
 - Paths are relative to the repository root.
 - Anything marked *planned* does not exist yet.

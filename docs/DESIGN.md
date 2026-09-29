@@ -1,11 +1,14 @@
 # Design
 
-The UI layer: visual language, components, interaction, and accessibility.
+The UI layer: visual language, page structure, components, motion, and
+accessibility.
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 **Files:** [`templates/index.html`](../templates/index.html) ·
 [`static/css/style.css`](../static/css/style.css) ·
-[`static/js/main.js`](../static/js/main.js)
+[`static/js/main.js`](../static/js/main.js) ·
+[`static/js/site.js`](../static/js/site.js) ·
+[`static/img/`](../static/img/)
 
 ---
 
@@ -16,17 +19,37 @@ progress bar. That screen gets as much design attention as the results — named
 stages, per-chunk messages, elapsed time, percentage, and a cancel button.
 A spinner alone is indistinguishable from a crash.
 
-**2. Never show a raw error.** Every failure the system knows about is paired
+**2. The tool is one click away.** The page is a full landing page, but the
+analyzer sits directly under the hero, and every call to action jumps to it.
+Nothing about the marketing sections gets in the way of pasting a link.
+
+**3. Never show a raw error.** Every failure the system knows about is paired
 with the action that fixes it.
 
-**3. Dense output needs structure, not decoration.** The result is ~500 words
-plus a full transcript. Tabs beat one long scroll; the transcript gets its own
-search.
+**4. Dense output needs structure, not decoration.** The result is hundreds of
+words plus a full transcript. Tabs beat one long scroll; the transcript gets
+its own search.
 
-**4. No build step.** Plain HTML, CSS, and JS. Anyone can open the files and
+**5. Honest content.** No invented testimonials, user counts, or customer
+logos. Every claim on the page describes something the code actually does.
+
+**6. No build step.** Plain HTML, CSS, and JS. Anyone can open the files and
 change them without installing a toolchain.
 
-## 2. Tokens
+## 2. Visual direction
+
+Chosen with the `ui-ux-pro-max` design-system search for an AI productivity
+tool, then adjusted for contrast:
+
+| Aspect | Choice |
+| --- | --- |
+| Style | Clean, modern product site: solid surfaces, 1px borders, soft glows only in the hero and CTA |
+| Palette | Teal primary with a cyan second tone; orange accent used sparingly |
+| Type | **Space Grotesk** for headings, **DM Sans** for body text |
+| Icons | Inline SVG sprite (Lucide, ISC licence) — no emoji, no icon font |
+| Page pattern | Product demo + features: hero → analyzer → how it works → features → use cases → privacy → FAQ → CTA |
+
+## 3. Tokens
 
 All defined on `:root` in `style.css` and re-declared under
 `:root[data-theme="light"]`. Never hard-code a colour in a component.
@@ -35,75 +58,92 @@ All defined on `:root` in `style.css` and re-declared under
 
 | Token | Dark | Light | Used for |
 | --- | --- | --- | --- |
-| `--bg` | `#0f1117` | `#f4f6fb` | Page background |
-| `--card` | `#1b1f2b` | `#ffffff` | Card surfaces |
-| `--card-2` | `#222736` | `#f7f9fc` | Inset surfaces — inputs, code, transcript |
-| `--border` | `#2c3243` | `#dfe4ee` | All borders and dividers |
-| `--text` | `#e7e9ee` | `#1b1f2b` | Body text |
-| `--text-muted` | `#9aa3b8` | `#626b80` | Secondary text, labels |
-| `--primary` | `#6d8bff` | `#4f46e5` | Actions, active state, focus |
-| `--primary-soft` | 14% primary | 10% primary | Tinted backgrounds, page glow |
-| `--success` | `#4ade80` | `#16a34a` | Completed stages |
-| `--warning` | `#fbbf24` | `#fbbf24` | Soft input validation |
-| `--danger` | `#f87171` | `#dc2626` | Errors, cancel |
-| `--highlight` | amber 35% | amber 45% | Transcript search matches |
+| `--bg` | `#0a1214` | `#f6fbfa` | Page background |
+| `--bg-alt` | `#0d171a` | `#ecf7f5` | Alternating section bands |
+| `--card` | `#0f1b1e` | `#ffffff` | Card surfaces |
+| `--card-2` | `#142427` | `#f3f9f8` | Inset surfaces — inputs, code, transcript |
+| `--border` | `#21373b` | `#d3e8e4` | Borders and dividers |
+| `--border-strong` | `#2f4b50` | `#a9d2cb` | Hover borders, emphasis |
+| `--text` | `#e3f1ef` | `#0f3b38` | Body text |
+| `--text-muted` | `#93aba8` | `#4a5d5b` | Secondary text, labels |
+| `--primary` | `#2dd4bf` | `#0f766e` | Actions, active state, focus |
+| `--primary-2` | `#22d3ee` | `#0e7490` | Second gradient stop |
+| `--on-primary` | `#042f2e` | `#ffffff` | Text on primary buttons |
+| `--accent` | `#fb923c` | `#c2410c` | Use-case icons, small highlights |
+| `--success` / `--warning` / `--danger` | green / amber / red | darker variants | State colours |
+| `--highlight` | orange 35% | orange 25% | Transcript search matches |
 
-The dark palette is the default because the tool is used alongside a terminal.
-Light mode is not an afterthought — `--primary` shifts from a lighter blue to
-indigo so contrast holds on white.
+`--primary` is lighter in dark mode and darker in light mode so text and
+buttons hold at least 4.5:1 contrast on their surface in both themes.
 
-### Type, space, shape
+### Type
 
 | Token | Value |
 | --- | --- |
-| `--font` | Inter → Segoe UI → system sans |
+| `--font-display` | Space Grotesk → DM Sans → Segoe UI |
+| `--font` | DM Sans → Segoe UI → system sans |
 | `--mono` | JetBrains Mono → Cascadia Code → Consolas |
-| `--radius` | `14px` cards · `10px` controls · `999px` pills |
-| `--shadow` | `0 10px 30px` at 35% dark / 8% light |
 
-Type scale is fluid at the top: `h1` is
-`clamp(1.8rem, 4vw, 2.6rem)`. Body is `1rem`/`1.6`. Secondary text is
-`0.85rem`, metadata `0.8rem`.
+Hero `h1` is `clamp(2.3rem, 5.2vw, 3.9rem)`; section headings
+`clamp(1.8rem, 3.6vw, 2.6rem)`. Body is `1rem`/`1.6`. Fonts load from Google
+Fonts with `display=swap`, falling back to system fonts if blocked.
 
-Spacing uses a `0.25rem` grid; cards are `1.5rem` padded, `1.1rem` on mobile.
+### Space, shape, motion
 
-## 3. Layout
+| Token | Value |
+| --- | --- |
+| `--space-1` … `--space-24` | `0.25rem` grid: 4, 8, 12, 16, 24, 32, 48, 64, 96 px |
+| `--radius-lg` / `--radius` / `--radius-sm` | `20px` cards · `14px` panels · `10px` controls; `999px` pills |
+| `--dur-fast` / `--dur` / `--dur-slow` | `150ms` hover · `240ms` state · `600ms` reveals |
+| `--ease-out` | `cubic-bezier(0.16, 1, 0.3, 1)` for entrances |
+| `--nav-h` | `68px` (`60px` on phones) — sticky offsets use it |
 
-Single column, `max-width: 900px`, centred. Wider lines hurt readability of
-the summary, which is the main thing being read.
+## 4. Page structure
 
 ```text
-┌──────────────────────────────────────────┐
-│                          [ ☀️ Light ]    │  topbar
-│            🎥 AI Video Assistant         │  header
-│         one line of explanation          │
-├──────────────────────────────────────────┤
-│  [ url input            ] [ Analyze ]    │  input card
-│  hint · Ctrl+K                           │
-│  ── Recent ────────────────  [ Clear ]   │
-│  ( pill ) ( pill ) ( pill )              │
-├──────────────────────────────────────────┤
-│  [thumb]  Video title                    │  progress card
-│           Channel · 30m 45s              │  (hidden until running)
-│  ◐ Transcribing chunk 2/5   42%  01:23  [Cancel]
-│  ████████████░░░░░░░░░░░░░░░░░░░░        │
-│  (1 Download)(2 Transcribe)(3 …)(4 …)    │
-├──────────────────────────────────────────┤
-│  Summary │ Actions │ Decisions │ … │     │  results card
-│  480 words · 3,204 transcribed  [Copy][.md][.txt]
-│                                          │
-│  rendered markdown                       │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│ [logo] AI Video Assistant   How · Features · …  ☀ [Try it now]   sticky nav
+├──────────────────────────────────────────────────────┤
+│ Turn any video into notes you can act on   ┌───────┐ │  hero
+│ lead text                                  │mockup │ │  + floating cards
+│ [Analyze a video →] [See how it works]     └───────┘ │
+├──────────────────────────────────────────────────────┤
+│ Works with: YouTube · Local files · Whisper · …      │  strip
+├──────────────────────────────────────────────────────┤
+│ #app — input card · progress card · results card     │  the analyzer
+├──────────────────────────────────────────────────────┤
+│ #how — five step cards                               │
+│ #features — bento grid                               │
+│ use cases — meetings · lectures · podcasts · tutorials
+│ #privacy — copy + data-flow diagram                  │
+│ #faq — accordion                                     │
+│ CTA band → footer                                    │
+└──────────────────────────────────────────────────────┘
 ```
 
-Only one of the progress card and results card is visible at a time.
+Content width is `1160px`; the analyzer and FAQ narrow to `900px` for
+readable line lengths.
 
-## 4. Components
+### Images and brand assets
+
+| File | Purpose |
+| --- | --- |
+| `static/img/logo.svg` | Logo mark — play triangle, summary lines, sparkle |
+| `static/img/favicon.svg`, `favicon.ico` | Browser tab icons (ICO holds 16/32/48 px) |
+| `static/img/apple-touch-icon.png`, `icon-512.png` | Home-screen and manifest icons |
+| `static/img/hero-mockup.svg` | Hero product illustration |
+| `static/img/privacy.svg` | Data-flow diagram: what stays local, what goes to Gemini |
+| `static/site.webmanifest` | Name, icons, and theme colour for installation |
+
+All illustrations are SVG with a `<title>`/`<desc>` and a descriptive `alt`.
+
+## 5. Analyzer components
 
 ### Input
 
-Flex row that wraps; the field is `flex: 1 1 320px` so it drops the button to
-its own full-width line below ~600px. Focus draws a 3px `--primary-soft` ring.
+A field with a leading link icon and the Analyze button. Focus draws a
+4px `--primary-soft` ring and tints the icon. Below it: a "transcribed locally"
+chip and a hint with the `Ctrl`+`K` shortcut.
 
 Validation is **soft**: typing something that is neither a URL nor a path
 tints the border amber. It never blocks submission — the backend decides.
@@ -116,61 +156,70 @@ but the full URL stays in `title`.
 
 ### Video metadata
 
-Thumbnail (120×68, `object-fit: cover`), title, then channel · duration.
-Appears as soon as yt-dlp reports it — typically within seconds, long before
-the analysis finishes. This is the earliest possible confirmation that the app
-got the *right* video.
-
-Hidden entirely when there is no metadata (local files).
+Thumbnail (128×72), title, then channel · duration. Appears as soon as yt-dlp
+reports it — the earliest confirmation that the app got the *right* video.
+Hidden for local files.
 
 ### Progress
 
 | Element | Purpose |
 | --- | --- |
-| Spinner | Something is happening |
-| Message | *What* is happening, per chunk |
-| Percent | How far |
-| Elapsed | How long — monospace so digits don't jitter |
+| Spinner + message | What is happening, per chunk |
+| Percent · elapsed | How far and how long — tabular numerals so digits don't jitter |
 | Cancel | A way out |
-| Bar | At-a-glance progress, 0.4s eased |
-| Step pills | Where in the overall pipeline |
+| Bar | Gradient fill with a moving sheen, so it never looks frozen between updates |
+| Stepper | Five numbered dots joined by a line: idle, active (pulses), done (checkmark) |
 
-Step pills have three states: idle (muted), `.active` (primary, tinted),
-`.done` (green). The bar is a real `role="progressbar"` with a live
-`aria-valuenow`.
+The bar is a real `role="progressbar"` with a live `aria-valuenow`.
 
 ### Tabs
 
-`role="tablist"` with roving `tabindex` — the selected tab is the only one in
-the tab order, and ←/→ move between them. Selection is driven by
-`aria-selected`, which is also the CSS hook, so the visual and accessible
-states cannot drift apart.
-
-Sticky at the top of the results card so they stay reachable while scrolling a
-long transcript.
+Six tabs with icons: Summary, Action items, Decisions, Questions, Transcript,
+Ask. `role="tablist"` with roving `tabindex`; ←/→ move between them.
+`aria-selected` is also the CSS hook, so visual and accessible state cannot
+drift apart. The tab bar is sticky just below the nav.
 
 ### Transcript
 
-Its own panel with a search box. Matches are wrapped in `<mark>` using
-`--highlight`, counted, and the first is scrolled into view. Search runs over
-the **escaped** text so the highlight count always equals what is marked up.
+Search box with a leading icon. Matches are wrapped in `<mark>`, counted, and
+the first is scrolled into view. Search runs over the **escaped** text so the
+count always equals what is highlighted.
 
-Capped at `55vh` with its own scroll, in `--card-2` with `white-space: pre-wrap`.
+### Ask
 
-### Toast
+Chat bubbles — the question on the right in a primary tint, the answer on the
+left. Citations render as superscript `[n]`; a collapsible "N sources" list
+under each answer shows the excerpts, tagged by section. Four suggestion chips
+appear until the first question. If Q&A is unavailable, a dashed notice
+explains why and the input is disabled.
 
-A single bottom-centre pill for transient confirmations — copied, downloaded,
-cancelled, complete. Slides up via `transform`, auto-dismisses after 2.2s.
+### Alerts and toast
 
-Transient success goes to the toast; **failure goes to the persistent alert
-box**, because errors need to stay on screen to be acted on.
+Errors go to a persistent alert with a red left border, the message, and — when
+recognised — a lightbulb remedy line from `ERROR_HINTS` in `main.js`.
+Transient success ("Copied", "Analysis complete") goes to a bottom toast that
+auto-dismisses after 2.2s.
 
-### Alerts
+## 6. Motion
 
-Title, message, and — when recognised — a `💡` remedy line. The mapping lives
-in `ERROR_HINTS` in `main.js`, matched by regex against the backend message.
+| Motion | Where | Detail |
+| --- | --- | --- |
+| Scroll reveal | Section content | Fade up 24px, staggered 80ms by `--i`, via `IntersectionObserver` in `site.js` |
+| Hero float | Mockup and floating cards | Slow 6–8s vertical bob, offset phases |
+| Background drift | Hero glows | 18s radial-gradient drift (no `filter: blur` — too costly to repaint) |
+| Hover lift | Cards, tiles, buttons | `translateY(-4px)`, icon tilt, arrow nudge |
+| Press | Buttons | `scale(0.97)` |
+| Progress | Bar and stepper | Sheen, active-step pulse, checkmark pop |
+| Results | Panels, bubbles, metadata | 240ms rise-in |
+| Error | Alert | 360ms shake |
 
-## 5. Interaction
+Reveal content is only hidden when JavaScript is running (`.js` class set by
+the head script), so the page is fully readable without JS.
+
+`prefers-reduced-motion: reduce` turns off smooth scrolling, shows all reveal
+content immediately, and collapses every animation and transition.
+
+## 7. Interaction
 
 | Input | Result |
 | --- | --- |
@@ -178,15 +227,14 @@ in `ERROR_HINTS` in `main.js`, matched by regex against the backend message.
 | `Ctrl`/`Cmd` + `K` | Focus and select the URL field |
 | `←` / `→` on a tab | Previous / next tab |
 | Click a recent pill | Re-run that source |
-| `Cancel` | Request cancellation |
+| Nav link | Smooth-scroll to the section; the link highlights while in view |
+| Menu button (≤ 820px) | Open/close the nav; `Esc` or an outside click closes it |
+| Theme button | Toggle light/dark; saved in `localStorage` |
 
 During a run the input and Analyze button are disabled and the button reads
 "Analyzing…", so the only enabled action is Cancel.
 
-## 6. States
-
-Every asynchronous surface has four: **idle**, **running**, **success**,
-**failure**. Cancellation is a fifth on the progress card.
+## 8. States
 
 | State | Progress card | Results | Alert | Toast |
 | --- | --- | --- | --- | --- |
@@ -198,39 +246,54 @@ Every asynchronous surface has four: **idle**, **running**, **success**,
 
 Empty sections render an italic muted line, never a blank panel.
 
-## 7. Accessibility
+## 9. Theming
 
-- **Contrast** — body text ≥ 7:1 on its surface in both themes; muted text
-  ≥ 4.5:1. `--primary` shifts between themes specifically to hold this.
+The theme is resolved **before first paint** by an inline script in `<head>`:
+saved choice from `localStorage`, otherwise the OS `prefers-color-scheme`.
+This avoids a flash of the wrong theme. `site.js` keeps the
+`<meta name="theme-color">` in step so the browser chrome matches.
+
+## 10. Accessibility
+
+- **Contrast** — body text ≥ 7:1, muted text and primary buttons ≥ 4.5:1 in
+  both themes.
 - **Focus** — `:focus-visible` gives a 2px offset outline on every control.
   Never removed.
-- **Labels** — the URL and search inputs have `.visually-hidden` `<label>`s.
-  The thumbnail carries a descriptive `alt`.
-- **Live regions** — the progress message is `role="status" aria-live="polite"`,
-  so stage changes are announced. The toast and match count are too.
+- **Skip link** — "Skip to the analyzer" is the first focusable element.
+- **Labels** — inputs have `.visually-hidden` `<label>`s; icon-only buttons
+  (theme, menu) have `aria-label`s that update with state; decorative SVGs are
+  `aria-hidden`.
+- **Live regions** — the progress message, toast, match count, and chat log
+  are announced politely.
 - **Tabs** — full ARIA tab pattern with roving tabindex and arrow keys.
-- **Motion** — `prefers-reduced-motion: reduce` collapses all animation and
-  transition to 0.01ms, including the spinner.
-- **Semantics** — `<section aria-label>` per region; `role="alert"` on errors.
+- **Menu** — `aria-expanded` and `aria-controls` on the toggle.
+- **Touch** — main controls are 44–54px tall; smaller controls grow to 44px on
+  coarse pointers.
+- **Motion** — reduced-motion respected everywhere (see §6).
 
-## 8. Responsive
+## 11. Responsive
 
-One breakpoint, `600px`:
+| Breakpoint | Changes |
+| --- | --- |
+| ≤ 1024px | Hero stacks and centres; how-it-works 3 columns; features and use cases 2 columns; privacy stacks |
+| ≤ 820px | Nav links collapse into a menu; "Try it now" hides |
+| ≤ 640px | Single-column grids; full-width buttons; smaller padding; stepper labels shrink |
 
-- Page padding `2.5rem` → `1.5rem`, cards `1.5rem` → `1.1rem`.
-- Analyze becomes full width.
-- Progress meta (percent/elapsed/cancel) wraps to its own row.
-- Thumbnail shrinks to 88×50.
-- Tabs scroll horizontally rather than wrapping.
+Verified with no horizontal scroll at 375, 768, and 1280px.
 
-Everything else is fluid by construction — flex wrapping and `clamp()` rather
-than fixed widths.
+## 12. Extending it
 
-## 9. Extending it
+**Adding a result tab:** add the `<button role="tab" data-tab="x">` (with an
+icon from the sprite) and a matching `<div id="panel-x" role="tabpanel">`, then
+populate it in `renderResults()`. Tab wiring is generic.
 
-**Adding a result tab:** add the `<button role="tab" data-tab="x">` and a
-matching `<div id="panel-x" role="tabpanel">`, then populate it in
-`renderResults()`. Tab wiring is generic.
+**Adding an icon:** add a `<symbol id="i-name" viewBox="0 0 24 24">` to the
+sprite at the top of `index.html`, then use
+`<svg class="icon" aria-hidden="true"><use href="#i-name"/></svg>`.
+
+**Adding a landing section:** use `.section` (or `.section section-alt` for a
+tinted band), a `.section-head` with a `.kicker`, and add `.reveal` with
+`style="--i:n"` to anything that should animate in.
 
 **Adding an error hint:** append a `[regex, "remedy"]` pair to `ERROR_HINTS`.
 

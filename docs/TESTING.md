@@ -4,8 +4,8 @@ Two suites, both dependency-free and fast. Neither needs an API key, a
 network connection, or a downloaded video.
 
 ```powershell
-python tests/test_api.py        # 41 checks — backend
-node tests/test_frontend.mjs    # 30 checks — frontend
+python tests/test_api.py        # 64 checks — backend
+node tests/test_frontend.mjs    # 35 checks — frontend
 ```
 
 Both exit non-zero on failure, so they drop straight into CI or a pre-commit
@@ -15,20 +15,22 @@ hook.
 
 ## `tests/test_api.py` — backend
 
-Replaces `utils.audio_processor`, `core.transcriber`, `core.summarize`, and
-`core.extractor` with stubs **before** importing `app`, so the routes and job
-machinery are exercised without yt-dlp, Whisper, or Gemini. Runs in ~2 seconds.
+Replaces `utils.audio_processor`, `core.transcriber`, `core.summarize`,
+`core.extractor`, the Chroma index, and the RAG answerer with stubs **before**
+importing `app`, so the routes and job machinery are exercised without yt-dlp,
+Whisper, Chroma, or Gemini. Runs in a few seconds.
 
 Covers:
 
 | Area | Checks |
 | --- | --- |
 | Health | Status, reported Whisper model, job counts |
-| Page | Renders, `url_for` resolved, 14 required element IDs present, ARIA roles |
+| Page | Renders, `url_for` resolved, 21 required element IDs present, ARIA roles |
 | Validation | Blank URL → 400, no body → 400, unknown job → 404 |
 | Happy path | 202 → running → done, percent reaches 100, all result fields populated, metadata captured, timestamps set |
 | Cancellation | Running job → 202 and reaches `cancelled`; finished job → 409 |
 | Failures | Pipeline exception → `status: error` with the message; silent audio guarded |
+| Q&A | All sections indexed; ask validation (blank, too long, unknown job, unfinished job → 400/404/409); answers with sources; pruned job with a persisted index still answers; indexing failure still finishes the job with `qa_ready: false` |
 
 ### Why the element-ID checks
 
@@ -60,6 +62,7 @@ Covers:
 | Markdown | `#`/`##` headings, bold, italic, inline code, `-`/`*`/numbered lists, list closing around paragraphs, empty input, real model output |
 | Formatting | Durations above and below an hour, zero, elapsed clock, word counts |
 | Error hints | Each mapped remedy resolves; unknown errors return none |
+| Citations | `[1]` and `[1, 2]` become superscripts; non-numeric brackets untouched; escaping preserved |
 | URL detection | URLs vs. Windows paths |
 
 ### The escaping tests are the important ones
@@ -113,14 +116,16 @@ A short clip producing 400+ words means the length banding in
 
 | Check | Expectation |
 | --- | --- |
-| Dark/light toggle | Survives reload; contrast holds in both |
-| Mobile at 375px | No horizontal scroll; Analyze full width |
+| Dark/light toggle | Survives reload; no flash of the wrong theme; contrast holds in both |
+| Mobile at 375px | No horizontal scroll; Analyze full width; menu opens and closes (Esc too) |
+| Landing page | Sections reveal on scroll; nav link highlights the section in view; every CTA jumps to the analyzer |
+| Ask tab | Suggestions disappear after the first question; citations and sources render |
 | Keyboard only | Tab reaches every control; ←/→ moves tabs; focus ring always visible |
 | `Ctrl`/`Cmd`+`K` | Focuses and selects the URL field |
 | Transcript search | Highlights, counts, scrolls to first match |
 | Cancel mid-run | Stops within one chunk; toast appears |
 | Recent pills | Persist across reload; Clear empties them |
-| Reduced motion | Spinner stops animating with the OS setting on |
+| Reduced motion | All content visible immediately and nothing animates with the OS setting on |
 
 ---
 

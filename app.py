@@ -20,6 +20,8 @@ from utils.audio_processor import process_input
 from core.transcriber import transcribe_all, Cancelled
 from core.summarize import summarize_transcript
 from core.extractor import extract_information
+from core.vector_store import index_video, has_index
+from core.rag_engine import answer_question
 
 app = Flask(__name__)
 
@@ -34,7 +36,11 @@ MAX_JOBS = 50
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 
 # Percentage each stage has completed by the time it finishes.
-STAGE_WEIGHTS = {"download": 15, "transcribe": 70, "summarize": 90, "extract": 100}
+STAGE_WEIGHTS = {
+    "download": 15, "transcribe": 70, "summarize": 88, "extract": 96, "index": 100,
+}
+
+MAX_QUESTION_CHARS = 1000
 
 
 def _update(job_id: str, **fields) -> None:
@@ -70,6 +76,34 @@ def _prune_jobs() -> None:
             )
             for job in finished[: len(JOBS) - MAX_JOBS]:
                 JOBS.pop(job["id"], None)
+
+
+def _index_for_qa(job_id: str, transcript: str, summary: str, information: dict):
+    """Embed the results for Q&A. Returns ``(ready, error)``.
+
+    A failure here must not throw away a finished analysis, so it is reported
+    on the job instead of failing it.
+    """
+    with JOBS_LOCK:
+        title = ((JOBS.get(job_id) or {}).get("metadata") or {}).get("title", "")
+
+    try:
+        count = index_video(
+            job_id,
+            {
+                "transcript": transcript,
+                "summary": summary,
+                "action_items": information.get("action_items", ""),
+                "decisions": information.get("decisions", ""),
+                "questions": information.get("questions", ""),
+            },
+            title=title or "",
+        )
+        print(f"[{job_id[:8]}] Indexed {count} chunk(s) for Q&A.")
+        return count > 0, None if count else "There was no text to index."
+    except Exception as error:
+        traceback.print_exc()
+        return False, f"Q&A indexing failed: {error or error.__class__.__name__}"
 
 
 def _run_analysis(job_id: str, source: str) -> None:
@@ -131,6 +165,16 @@ def _run_analysis(job_id: str, source: str) -> None:
             STAGE_WEIGHTS["summarize"],
         )
         information = extract_information(summary)
+        _update(
+            job_id,
+            action_items=information.get("action_items", ""),
+            decisions=information.get("decisions", ""),
+            questions=information.get("questions", ""),
+        )
+
+        checkpoint()
+        step("index", "Indexing the video for Q&A...", STAGE_WEIGHTS["extract"])
+        qa_ready, qa_error = _index_for_qa(job_id, transcript, summary, information)
 
         _update(
             job_id,
@@ -138,9 +182,8 @@ def _run_analysis(job_id: str, source: str) -> None:
             stage="done",
             message="Analysis complete.",
             percent=100,
-            action_items=information.get("action_items", ""),
-            decisions=information.get("decisions", ""),
-            questions=information.get("questions", ""),
+            qa_ready=qa_ready,
+            qa_error=qa_error,
             finished_at=datetime.now().isoformat(timespec="seconds"),
         )
 
@@ -196,6 +239,8 @@ def analyze():
             "action_items": "",
             "decisions": "",
             "questions": "",
+            "qa_ready": False,
+            "qa_error": None,
             "error": None,
             "cancel_requested": False,
             "started_at": datetime.now().isoformat(timespec="seconds"),
@@ -238,6 +283,46 @@ def cancel_job(job_id: str):
         job["message"] = "Cancelling after the current step..."
 
     return jsonify({"status": "cancelling"}), 202
+
+
+@app.post("/api/jobs/<job_id>/ask")
+def ask(job_id: str):
+    """Answer a question about a finished analysis from its indexed content.
+
+    Body: ``{"question": str, "history": [{"role", "content"}, ...]}``.
+    Works for jobs pruned from memory too, as long as their index persists.
+    """
+    data = request.get_json(silent=True) or {}
+    question = str(data.get("question") or "").strip()
+    history = data.get("history") if isinstance(data.get("history"), list) else []
+
+    if not question:
+        return jsonify({"error": "A question is required."}), 400
+    if len(question) > MAX_QUESTION_CHARS:
+        return jsonify({
+            "error": f"Questions are limited to {MAX_QUESTION_CHARS} characters."
+        }), 400
+
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        status = job["status"] if job else None
+        qa_ready = bool(job and job.get("qa_ready"))
+        qa_error = job.get("qa_error") if job else None
+
+    if job is not None and status != "done":
+        return jsonify({"error": "Q&A is available once the analysis finishes."}), 409
+    if job is not None and not qa_ready:
+        return jsonify({"error": qa_error or "This analysis was not indexed for Q&A."}), 409
+
+    try:
+        if job is None and not has_index(job_id):
+            return jsonify({"error": "Unknown job id."}), 404
+        result = answer_question(job_id, question, history)
+    except Exception as error:
+        traceback.print_exc()
+        return jsonify({"error": str(error) or error.__class__.__name__}), 502
+
+    return jsonify(result)
 
 
 @app.get("/api/health")

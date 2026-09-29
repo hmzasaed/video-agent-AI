@@ -190,6 +190,32 @@ full response, and try a different `GEMINI_MODEL`.
 
 ---
 
+## Q&A (Ask tab)
+
+### "Q&A is unavailable for this analysis"
+
+Indexing failed after the analysis finished; the reason follows the message.
+The results are still valid — only the Ask tab is affected.
+
+| Reason | Fix |
+| --- | --- |
+| Embedding model could not download | It downloads once (~80 MB) to `~/.cache/chroma` on first use — check your connection and re-run the analysis |
+| `onnxruntime` / `chromadb` import error | `pip install -r Requirements.txt` inside the venv |
+| Permission error on `data/chroma` | Make the folder writable, or set `CHROMA_DIR` in `.env` to one that is |
+
+### "I could not find anything in this video related to that question"
+
+The retrieved excerpts did not contain an answer, and the model is instructed
+not to guess. Rephrase with words the speaker actually used, or check the
+Transcript tab to see whether it was said at all.
+
+### "Unknown job id" when asking
+
+The job was pruned from memory **and** its index is missing — for example
+after deleting `data/chroma/`. Re-run the analysis.
+
+---
+
 ## Interface
 
 ### The page loads but nothing happens on Analyze
@@ -199,7 +225,7 @@ Open the browser console (F12). Common causes:
 | Console shows | Cause |
 | --- | --- |
 | `Cannot read properties of null` | Template and `main.js` are out of sync — an element ID was renamed. `python tests/test_api.py` catches this. |
-| 404 on `/static/js/main.js` | Static files missing or server started from the wrong directory |
+| 404 on `/static/js/main.js` or `site.js` | Static files missing or server started from the wrong directory |
 | Nothing at all | Check the server terminal for a traceback |
 
 ### Progress stops updating
@@ -216,6 +242,12 @@ and the transcript tab; if the transcript is empty the whole chain fails.
 
 Clipboard access requires a secure context. `127.0.0.1` counts as secure; a
 LAN IP over plain HTTP does not. Use the download buttons instead.
+
+### Headings show in a plain system font
+
+The page loads Space Grotesk and DM Sans from Google Fonts. If you are
+offline or the request is blocked, the system-font fallback is used. The app
+works the same either way.
 
 ### Theme or recent list doesn't persist
 

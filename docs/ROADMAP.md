@@ -10,7 +10,7 @@ work, not by ambition.
 | Capability | Notes |
 | --- | --- |
 | YouTube and local-file ingestion | yt-dlp → MP3 → mono 16 kHz WAV → 10-min chunks |
-| Local Whisper transcription | Audio never leaves the machine |
+| Local Whisper transcription | `faster-whisper` with `openai-whisper` fallback; audio never leaves the machine |
 | Map-reduce summarization | Handles arbitrarily long videos |
 | Length banded to transcript size | [ADR-005](DECISIONS.md#adr-005--summary-length-scales-with-transcript-length) |
 | Action items / decisions / questions | Three targeted extraction calls |
@@ -20,10 +20,13 @@ work, not by ambition.
 | Searchable transcript | Highlight + match count |
 | Export | `.md` and `.txt` |
 | Recent sources | `localStorage`, one click to re-run |
-| Dark/light themes | Token-based, persisted |
-| Accessibility | ARIA tabs, live regions, focus states, reduced-motion |
-| Actionable error messages | Six mapped remedies |
-| Test suites | 41 backend + 30 frontend checks |
+| Dark/light themes | Token-based, persisted, follows the OS by default, no flash |
+| Landing page | Hero, how it works, features, use cases, privacy, FAQ, with scroll animations |
+| Brand assets | Logo, favicons, manifest, SVG illustrations |
+| Accessibility | ARIA tabs, live regions, skip link, focus states, reduced-motion |
+| Actionable error messages | Eight mapped remedies |
+| Q&A over the video (RAG) | Chroma + local MiniLM embeddings, cited answers, persisted index |
+| Test suites | 64 backend + 35 frontend checks |
 
 ---
 
@@ -74,12 +77,11 @@ only the summary becomes nearly instant, which makes prompt iteration practical.
 
 ## Later
 
-### Q&A over the transcript
+### Timestamped Q&A citations
 
-Ask questions and get answers cited back to the transcript. Needs chunking,
-embeddings, and a vector store — `chromadb` and `sentence-transformers` are
-already in `Requirements.txt` from an earlier plan. A real feature, and a real
-milestone.
+Q&A shipped, but sources cite text, not moments. Once Whisper segment
+timestamps are kept (below), store them on each transcript chunk so a
+citation can jump to that point in the video.
 
 ### Speaker diarization
 

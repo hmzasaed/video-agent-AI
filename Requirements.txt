@@ -19,9 +19,11 @@ ffmpeg-python
 # -----------------------------
 # Local Whisper Transcription
 # -----------------------------
-openai-whisper
+# Preferred engine: CTranslate2-based, no PyTorch needed.
+faster-whisper
 
-# PyTorch backend required by Whisper
+# Fallback engine (needs PyTorch). Used only if faster-whisper is missing.
+openai-whisper
 torch
 torchaudio
 
@@ -45,17 +47,15 @@ langchain-mistralai
 mistralai
 
 # -----------------------------
-# RAG / Vector Database
+# RAG / Vector Database (Q&A chat)
 # -----------------------------
+# Embeddings use Chroma's built-in ONNX all-MiniLM-L6-v2 model, so no PyTorch
+# or sentence-transformers is needed.
 chromadb
+onnxruntime
 
-# -----------------------------
-# HuggingFace Embeddings
-# -----------------------------
-sentence-transformers
-transformers
-sentencepiece
-huggingface-hub
+# Do NOT add sentence-transformers here: langchain-text-splitters imports it
+# eagerly, which pulls in PyTorch and breaks startup where torch is blocked.
 
 # -----------------------------
 # Machine Learning / Numerical

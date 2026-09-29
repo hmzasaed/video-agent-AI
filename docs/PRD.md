@@ -1,7 +1,7 @@
 # Product Requirements — AI Video Assistant
 
-**Status:** Implemented (v1)
-**Last updated:** 2026-09-28
+**Status:** Implemented (v1.0)
+**Last updated:** 2026-09-29
 
 ---
 
@@ -58,6 +58,8 @@ consumer product; it assumes a terminal and an API key.
 | R10 | Export the result as `.md` or `.txt` | ✅ |
 | R11 | Explain failures in language the user can act on | ✅ |
 | R12 | Work without an internet round trip for transcription | ✅ |
+| R13 | Answer follow-up questions about the video, citing the passages used | ✅ |
+| R14 | Keep Q&A available after the job leaves memory or the server restarts | ✅ |
 
 ### Out of scope (v1 — deliberate)
 
@@ -67,7 +69,6 @@ consumer product; it assumes a terminal and an API key.
 | Persistent storage of past analyses | Adds a database for a tool used a few times a day |
 | Speaker diarization ("who said what") | Whisper does not do it; adding `pyannote` is a project of its own |
 | Live/streaming transcription | Different architecture entirely — see [ROADMAP.md](ROADMAP.md) |
-| Q&A chat over the transcript | Needs a vector store; valuable but a separate milestone |
 | Non-English output | Whisper transcribes many languages, but prompts assume English |
 | Production deployment | `app.run()` is a dev server. See [ARCHITECTURE.md](ARCHITECTURE.md) |
 
@@ -77,10 +78,12 @@ consumer product; it assumes a terminal and an API key.
 1. User opens http://127.0.0.1:5000
 2. Pastes a YouTube URL, presses Enter
 3. Within ~10s: video title, channel, duration, and thumbnail appear
-4. Progress bar advances through 4 named stages with a live elapsed timer
+4. Progress bar advances through 5 named stages with a live elapsed timer
 5. User can cancel at any point
-6. On completion: 5 tabs — Summary, Action Items, Decisions, Questions, Transcript
-7. User copies a section, or downloads the whole report as .md
+6. On completion: 6 tabs — Summary, Action items, Decisions, Questions,
+   Transcript, Ask
+7. User asks follow-up questions in the Ask tab and gets cited answers
+8. User copies a section, or downloads the whole report (including Q&A) as .md
 ```
 
 The critical design constraint is **step 3–4**: transcription takes minutes. A
@@ -121,14 +124,28 @@ to reflect real time spent, not stage count:
 | --- | --- |
 | Download & prepare | 15% |
 | Transcribe | 70% |
-| Summarize | 90% |
-| Extract | 100% |
+| Summarize | 88% |
+| Extract | 96% |
+| Index for Q&A | 100% |
 
 ### R11 — Actionable errors
 
 Every known failure maps to a specific remedy shown under the error text —
 missing API key, rate limit, missing FFmpeg, missing Whisper, private video,
 silent audio. A raw stack trace is never the user-facing message.
+
+### R13 — Q&A over the video
+
+Questions are answered by retrieval-augmented generation over a local Chroma
+index of the transcript and generated sections. Answers must:
+
+- Draw **only** on the analyzed video, never another job or general knowledge.
+- Say plainly when the video does not contain the answer, rather than guess.
+- Cite each excerpt used as `[n]`, with the excerpt itself viewable under the
+  answer.
+
+If indexing fails, the analysis is still delivered and the Ask tab says why
+Q&A is unavailable.
 
 ## 7. Success criteria
 
@@ -149,7 +166,8 @@ The product is working when all of the following hold:
 | End-to-end run | ✅ 19s video, real YouTube URL, completed |
 | Summary scales to source | ✅ 35-word transcript → 96 words; 443 → 459 |
 | Length fix vs. original | ✅ 105 → 459 words on the same meeting transcript |
-| Error states | ✅ 6 mapped remedies, verified in tests |
+| Error states | ✅ 8 mapped remedies, verified in tests |
+| Q&A | ✅ Cited answers; unanswerable questions refused; indexing failure degrades gracefully (tested) |
 | Cancellation | ✅ Verified — job reports `cancelled` |
 | Export | ✅ `.md` and `.txt` |
 
@@ -157,12 +175,12 @@ The product is working when all of the following hold:
 
 | Area | Requirement |
 | --- | --- |
-| **Privacy** | Audio never leaves the machine. Only the *transcript text* is sent to Gemini. |
+| **Privacy** | Audio never leaves the machine, and the Q&A index stays on local disk. Only *text* (transcript, and retrieved excerpts for Q&A) is sent to Gemini. |
 | **Cost** | Transcription is free (local). Gemini usage is a handful of calls per video. |
 | **Latency** | Dominated by Whisper. Roughly real-time on CPU for the `base` model. |
 | **Resilience** | A failure in any stage fails that job only; the server stays up. |
 | **Memory** | Finished jobs are evicted after 2 hours, capped at 50 retained. |
-| **Accessibility** | Keyboard-navigable, screen-reader labelled, respects reduced-motion. |
+| **Accessibility** | Keyboard-navigable, screen-reader labelled, 4.5:1 text contrast in both themes, respects reduced-motion. |
 
 ## 9. Known limitations
 

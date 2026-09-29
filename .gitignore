@@ -12,15 +12,32 @@ __pycache__/
 *.pyo
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Node (only used to run the frontend test suite)
+node_modules/
 
 # Generated media and application output
 downloads/
 outputs/
+data/
 *.mp3
 *.wav
 *.mp4
 *.m4a
 *.webm
+*.mkv
+*.mov
+*.flac
+*.ogg
+*.opus
+*.log
+
+# Local Claude Code settings
+.claude/settings.local.json
 
 # IDE and operating-system files
 .vscode/
