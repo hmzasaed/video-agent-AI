@@ -25,7 +25,7 @@ TRANSCRIPT_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=900, chunk_overl
 SECTION_SPLITTER = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
 
 # Order matters only for display: it is the order sections are listed in.
-SECTIONS = ("summary", "action_items", "decisions", "questions", "transcript")
+SECTIONS = ("summary", "minutes", "action_items", "decisions", "questions", "transcript")
 
 _collection = None
 _lock = threading.Lock()
@@ -86,14 +86,20 @@ def index_video(doc_id: str, sections: dict[str, str], title: str = "") -> int:
     return len(chunks)
 
 
-def search(doc_id: str, query: str, k: int = 6) -> list[dict]:
-    """Return the ``k`` chunks of one analysis most similar to ``query``."""
+def search(doc_ids: str | list[str], query: str, k: int = 6) -> list[dict]:
+    """Return the ``k`` chunks most similar to ``query``.
+
+    ``doc_ids`` is one analysis id or a list of them; results never include
+    chunks from any other analysis. Each hit carries its ``doc_id``.
+    """
+    if isinstance(doc_ids, str):
+        doc_ids = [doc_ids]
+    if not doc_ids:
+        return []
+    where = {"doc_id": doc_ids[0]} if len(doc_ids) == 1 else {"doc_id": {"$in": list(doc_ids)}}
+
     collection = _get_collection()
-    result = collection.query(
-        query_texts=[query],
-        n_results=k,
-        where={"doc_id": doc_id},
-    )
+    result = collection.query(query_texts=[query], n_results=k, where=where)
 
     hits = []
     for text, meta, distance in zip(
@@ -101,6 +107,7 @@ def search(doc_id: str, query: str, k: int = 6) -> list[dict]:
     ):
         hits.append({
             "text": text,
+            "doc_id": meta.get("doc_id", ""),
             "section": meta.get("section", ""),
             "chunk": meta.get("chunk", 0),
             "score": round(1 - distance, 3),

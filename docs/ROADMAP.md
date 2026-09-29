@@ -26,23 +26,28 @@ work, not by ambition.
 | Accessibility | ARIA tabs, live regions, skip link, focus states, reduced-motion |
 | Actionable error messages | Eight mapped remedies |
 | Q&A over the video (RAG) | Chroma + local MiniLM embeddings, cited answers, persisted index |
-| Test suites | 64 backend + 35 frontend checks |
+| Persistent history | Finished analyses in SQLite; survive restarts |
+| Retry with backoff | Rate limits, 5xx, timeouts; agent model falls back to the summary model |
+| Meeting analysis | Uploads, minutes, structured tasks with owners and deadlines |
+| Contacts and `@mentions` | Owner matching (name, alias, first name, fuzzy) and reassignment |
+| Task emails | One draft per person, review/edit, confirm-to-send over SMTP, dry-run default |
+| Research agent | Workspaces of 2+ videos, comparison, tool-using chat with video and web citations |
+| Mistral summaries | `SUMMARY_PROVIDER=mistral` |
+| Test suites | 174 backend + 45 agent + 54 frontend checks |
 
 ---
 
 ## Next
 
-### 1. Retry with backoff on Gemini rate limits
+### 1. Speaker diarization for meetings
 
-**Problem.** A 429 fails the whole job after transcription has already
-finished — the expensive part is wasted.
+**Problem.** Task owners come from names people *say*. "I'll do it" can't be
+attributed, because Whisper doesn't know who is speaking.
 
-**Work.** Wrap `generate_text` in exponential backoff, three attempts, honour
-`Retry-After`. Report "rate limited, retrying in Ns" through the job message
-so the user sees why it stalled.
+**Work.** `pyannote.audio` diarization, then map speakers to contacts once per
+meeting. Needs a Hugging Face token and noticeably more runtime.
 
-**Value.** High. This is the most likely failure on the free tier, and the
-most annoying, because it discards completed work.
+**Value.** High for meetings — the most common reason a task has no owner.
 
 ### 2. Clean up `downloads/`
 
@@ -54,15 +59,10 @@ completion unless a `KEEP_DOWNLOADS` flag is set.
 
 **Value.** High — it is a bug, not a feature. Low effort.
 
-### 3. Persist jobs
+### 3. Calendar and tracker integrations
 
-**Problem.** Restarting the server loses everything, including finished
-results a user may still want.
-
-**Work.** SQLite, one table, written on stage transitions. Add
-`GET /api/jobs` to list history, and a history view in the UI.
-
-**Value.** High. Also a prerequisite for anything multi-process.
+Send tasks to Google Calendar, Jira, or Linear in addition to email, reusing
+the same draft → review → confirm flow.
 
 ### 4. Cache by video ID
 
@@ -83,11 +83,10 @@ Q&A shipped, but sources cite text, not moments. Once Whisper segment
 timestamps are kept (below), store them on each transcript chunk so a
 citation can jump to that point in the video.
 
-### Speaker diarization
+### Streaming agent answers
 
-"Who said what" would make meeting summaries substantially more useful —
-action items could be attributed reliably. Whisper does not do this; it needs
-`pyannote.audio`, a Hugging Face token, and meaningful extra runtime.
+Stream the agent's tool steps and answer as they happen instead of waiting for
+the full response.
 
 ### Timestamped summaries
 

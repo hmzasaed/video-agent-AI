@@ -1,12 +1,16 @@
 # Testing
 
-Two suites, both dependency-free and fast. Neither needs an API key, a
-network connection, or a downloaded video.
+Three suites, all fast. None needs an API key, a network connection, or a
+downloaded video, and none can send email.
 
 ```powershell
-python tests/test_api.py        # 64 checks — backend
-node tests/test_frontend.mjs    # 35 checks — frontend
+python tests/test_api.py                 # 174 checks — routes, jobs, meetings, contacts, email, workspaces
+.venv\Scripts\python tests/test_agent.py  # 45 checks — agent loop, tools, Gemini retries/fallback
+node tests/test_frontend.mjs             # 54 checks — rendering, XSS, citations, @mentions
 ```
+
+`test_agent.py` imports the real `core.vector_store`, so run it with the
+virtual environment's Python.
 
 Both exit non-zero on failure, so they drop straight into CI or a pre-commit
 hook.
@@ -31,6 +35,12 @@ Covers:
 | Cancellation | Running job → 202 and reaches `cancelled`; finished job → 409 |
 | Failures | Pipeline exception → `status: error` with the message; silent audio guarded |
 | Q&A | All sections indexed; ask validation (blank, too long, unknown job, unfinished job → 400/404/409); answers with sources; pruned job with a persisted index still answers; indexing failure still finishes the job with `qa_ready: false` |
+| Persistence | Finished analyses listed and served from SQLite after leaving memory (temporary `DB_PATH`) |
+| Uploads | Missing file, wrong type, oversize (413), random stored name, original name kept |
+| Contacts | Create, validation, case-insensitive duplicate email, update, list |
+| Meetings | Meeting job completes with minutes and tasks; first-name, alias, and unmatched owners; rematch after adding a contact; task edit validation; `@mention` reassignment; dismiss |
+| Email | One draft per person; dismissed tasks excluded; re-drafting replaces drafts; edit; **send refused without confirmation**; dry-run logs only; real send through a fake SMTP server; double send refused; send refused when the contact's address changed |
+| Workspaces | Create/validate, auto-name, compare (cached, needs 2 videos), chat forwards videos and the web toggle, add/remove videos, delete |
 
 ### Why the element-ID checks
 
@@ -76,6 +86,20 @@ If the suite cannot find the `DOMContentLoaded` block it exits with an
 explanatory error rather than a confusing import failure.
 
 ---
+
+## `tests/test_agent.py` — research agent
+
+Runs the **real** agent loop and tools against a scripted fake Gemini, a fake
+vector search, and a temporary SQLite database.
+
+| Area | Checks |
+| --- | --- |
+| Gemini client | 503 and timeouts retried; persistent overload raises a friendly error; fallback model used; client errors not retried; exhausted quota fails fast then falls back once |
+| Tool set | No tool can send email; meeting tools only with a meeting; web tool hidden when off |
+| Loop | Tool calls executed and fed back; history mapped; step limit enforced with a final tool-less call; tool errors don't crash the loop |
+| Citations | Excerpt ids per video (`V1-1`), summaries citable as `[V2]`, web sources deduplicated (`W1`, `W2`) |
+| Web search | Uses Google Search grounding; refused when off; quota failure not retried and later searches short-circuit |
+| Meetings | Tasks listed; drafts only for saved contacts; **nothing sent**; injected recipient rejected; non-meetings refused |
 
 ## Manual verification
 
@@ -125,6 +149,11 @@ A short clip producing 400+ words means the length banding in
 | Transcript search | Highlights, counts, scrolls to first match |
 | Cancel mid-run | Stops within one chunk; toast appears |
 | Recent pills | Persist across reload; Clear empties them |
+| Upload | Drag a file onto the input card; progress shows; Analyze uses it |
+| Meeting mode | Six-step progress; Minutes and Tasks tabs; owners matched |
+| `@mention` | Keyboard only: focus owner, type, ↑/↓, Enter assigns, Esc restores |
+| Email | Prepare → edit → Send opens the confirm dialog; dry-run notice shown |
+| Compare & Ask | Create a workspace; Compare; ask with web on and off; click a citation to reveal its source |
 | Reduced motion | All content visible immediately and nothing animates with the OS setting on |
 
 ---
@@ -147,6 +176,7 @@ browser.
 ```yaml
 - run: pip install -r Requirements.txt
 - run: python tests/test_api.py
+- run: python tests/test_agent.py
 - run: node tests/test_frontend.mjs
 ```
 

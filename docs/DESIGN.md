@@ -3,11 +3,11 @@
 The UI layer: visual language, page structure, components, motion, and
 accessibility.
 
-**Last updated:** 2026-09-29
+**Last updated:** 2026-09-29 (research agent, meetings & email)
 **Files:** [`templates/index.html`](../templates/index.html) ·
 [`static/css/style.css`](../static/css/style.css) ·
 [`static/js/main.js`](../static/js/main.js) ·
-[`static/js/site.js`](../static/js/site.js) ·
+[`static/js/site.js`](../static/js/site.js) · [`static/js/agent.js`](../static/js/agent.js) · [`static/js/meetings.js`](../static/js/meetings.js) ·
 [`static/img/`](../static/img/)
 
 ---
@@ -199,6 +199,48 @@ Errors go to a persistent alert with a red left border, the message, and — whe
 recognised — a lightbulb remedy line from `ERROR_HINTS` in `main.js`.
 Transient success ("Copied", "Analysis complete") goes to a bottom toast that
 auto-dismisses after 2.2s.
+
+## 5b. Tools: Analyze · Compare & Ask · Meetings & tasks
+
+The analyzer section holds three tools behind a pill-shaped switcher
+(`.app-tabs`, full ARIA tab pattern with ←/→). Files: `main.js` (Analyze),
+`agent.js` (Compare & Ask), `meetings.js` (Meetings & tasks).
+
+```text
+            ( Analyze | Compare & Ask | Meetings & tasks )
+┌── Compare & Ask ─────────────────────────────────────────────┐
+│ ┌ sidebar ─────────┐ ┌ workspace ──────────────────────────┐ │
+│ │ Workspaces       │ │ V1 card   V2 card   V3 card         │ │
+│ │ New workspace    │ │ Comparison  [Compare]               │ │
+│ │ ☐ video ☐ meeting│ ├ Research agent        (o) Web search│ │
+│ │ [Create]         │ │ chat · citations · sources · steps  │ │
+│ └──────────────────┘ └─────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
+
+| Component | Notes |
+| --- | --- |
+| **Mode toggle** (`.seg`) | Video / Meeting radio group styled as a segmented control; Meeting changes the hint and adds a Tasks step to the stepper (6 steps) |
+| **Upload** | Button + hidden file input + drag-and-drop onto the input card (dashed overlay). XHR upload with a live percentage in the file chip; the chip's × clears it |
+| **Sidebar layout** (`.split-app`) | 300px sticky sidebar + main column; stacks under 1024px |
+| **Pick list** (`.pick-item`) | History and workspaces; checkbox variant for building a workspace; selected state uses `--primary-soft` |
+| **Video card** | 16:9 thumbnail (or icon on a teal gradient), `V1` badge, kind · channel · duration, 180-character summary snippet, Open / Tasks / Remove |
+| **Comparison** | Markdown in an inset panel; "Compare again" regenerates |
+| **Web search switch** (`.switch`) | Checkbox styled as a toggle; turns the agent's web tool off for that conversation |
+| **Agent answer** | Markdown with clickable superscript citations (`[V1-3]` excerpt, `[V1]` summary, `[W2]` web). Clicking opens the sources list and flashes the source. Below: "N video excerpts · M web sources", then "How I answered · N steps" |
+| **Draft card** | Orange-tinted callout when the agent prepared email drafts: recipients, "Nothing has been sent", Review & send |
+| **Task board** | Stats line, Re-match owners, Prepare emails; one row per task with a coloured left border by status |
+| **Task row** | Auto-growing task text, evidence quote, owner picker, owner state (✓ email / ⚠ not in contacts), due date, status badge, dismiss/restore |
+| **Owner picker** | `@` combobox (`role="combobox"`, `aria-activedescendant`, listbox of contacts with avatar initials). ↑/↓, Enter, Esc; "Unassign" option; filtering by name, word, alias, email |
+| **Quick add contact** | For an unmatched name: "Add Priya as a contact" reveals an email field; saving creates the contact and assigns the task |
+| **Email card** | Collapsible: recipient, status badge, editable subject and body, Save changes (only when edited), Send / Retry |
+| **Confirm dialog** (`<dialog>`) | Lists every recipient and subject, states dry-run vs real delivery, Cancel / Send N. The only way to send |
+| **Notices** | Dry-run notice (teal) and "email not configured" (orange) above the task board |
+| **Badges** | Proposed · Draft ready · Emailed · Sent · Dry run · Send failed · Dismissed |
+| **Contacts** | Add/edit form in the Meetings sidebar; list with avatar, email, aliases; delete needs a second click within 3 seconds |
+
+**Honesty rules for these screens:** the agent never claims an email was sent;
+web content is labelled and linked; tasks show the quote they came from.
 
 ## 6. Motion
 

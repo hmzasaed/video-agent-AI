@@ -30,6 +30,7 @@ globalThis.localStorage = {
 const EXPORTS = [
     "renderMarkdown", "escapeHtml", "formatDuration", "formatClock",
     "countWords", "hintFor", "looksLikeUrl", "linkCitations",
+    "mentionQuery", "filterContacts", "groupTasksByContact", "statusLabel",
 ];
 
 const module_ = await import(
@@ -50,6 +51,7 @@ function check(label, ok, detail = "") {
 const {
     renderMarkdown, escapeHtml, formatDuration, formatClock,
     countWords, hintFor, looksLikeUrl, linkCitations,
+    mentionQuery, filterContacts, groupTasksByContact, statusLabel,
 } = module_;
 
 // ── Escaping / XSS ──────────────────────────────────────────────────
@@ -121,12 +123,48 @@ check("windows path is not a url", !looksLikeUrl("C:\\video.mp4"));
 
 // ── Q&A citations ───────────────────────────────────────────────────
 check("citation marked",
-    linkCitations("<p>Friday [2].</p>") === '<p>Friday <sup class="cite">[2]</sup>.</p>');
-check("grouped citation", linkCitations("x [1, 3]").includes('<sup class="cite">[1,3]</sup>'));
+    linkCitations("<p>Friday [2].</p>") === '<p>Friday <sup class="cite" data-refs="2">[2]</sup>.</p>');
+check("grouped citation", linkCitations("x [1, 3]").includes('data-refs="1,3">[1,3]</sup>'));
 check("non-numeric brackets untouched", linkCitations("[todo]") === "[todo]");
 const cited = linkCitations(renderMarkdown("<script>x</script> [1]"));
 check("citations keep escaping", !cited.includes("<script>") && cited.includes("cite"));
 check("hint: qa indexing", hintFor("Q&A indexing failed: boom").length > 0);
+
+// ── Agent citations ─────────────────────────────────────────────────
+check("video excerpt citation", linkCitations("A [V1-3].").includes('data-refs="V1-3">[V1-3]</sup>'));
+check("web citation", linkCitations("B [W2]").includes('data-refs="W2">[W2]</sup>'));
+check("mixed citation group", linkCitations("C [V2-1, W1]").includes('data-refs="V2-1,W1"'));
+check("whole-video citation", linkCitations("D [V3]").includes('data-refs="V3">[V3]</sup>'));
+check("lookalike brackets untouched", linkCitations("[Wx] [V1-] [V] [W]") === "[Wx] [V1-] [V] [W]");
+check("agent citations keep escaping",
+    !linkCitations(renderMarkdown('<img src=x onerror=alert(1)> [W1]')).includes("<img"));
+
+// ── @mentions and task helpers ──────────────────────────────────────
+const people = [
+    { id: 1, name: "Sarah Khan", email: "sarah@example.com", aliases: "" },
+    { id: 2, name: "Omar Ali", email: "omar@example.com", aliases: "O, Oz" },
+    { id: 3, name: "Samir Patel", email: "sp@example.com", aliases: "" },
+];
+check("mention strips @ and case", mentionQuery("  @SaRa ") === "sara");
+check("empty query lists everyone", filterContacts(people, "@").length === 3);
+check("name prefix match", filterContacts(people, "@sa").map((c) => c.id).join() === "3,1");
+check("last-name match", filterContacts(people, "khan")[0].id === 1);
+check("alias match", filterContacts(people, "oz")[0].id === 2);
+check("email match", filterContacts(people, "sp@")[0].id === 3);
+check("no match", filterContacts(people, "zzz").length === 0);
+check("result limit", filterContacts(people, "", 2).length === 2);
+
+const grouped = groupTasksByContact([
+    { id: 1, contact_id: 1, status: "proposed" },
+    { id: 2, contact_id: 1, status: "drafted" },
+    { id: 3, contact_id: null, status: "proposed" },
+    { id: 4, contact_id: 2, status: "dismissed" },
+]);
+check("tasks grouped per contact", grouped.get(1).length === 2);
+check("unassigned grouped under null", grouped.get(null).length === 1);
+check("dismissed tasks skipped", !grouped.has(2));
+check("status labels", statusLabel("drafted") === "Draft ready" && statusLabel("dry-run") === "Dry run");
+check("unknown status passes through", statusLabel("mystery") === "mystery");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

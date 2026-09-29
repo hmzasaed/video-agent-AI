@@ -216,6 +216,64 @@ after deleting `data/chroma/`. Re-run the analysis.
 
 ---
 
+## Research agent
+
+### "Your Gemini API key has no quota left for this request"
+
+The key's quota for that model or feature is used up (free-tier daily limits
+are per model). The agent automatically retries once with `GEMINI_MODEL`.
+Check usage at <https://ai.dev/rate-limit>, wait for the reset, or enable
+billing.
+
+### Web search always fails
+
+Google Search grounding needs quota on your key; free-tier keys can have none.
+The agent then answers from the videos and says the web couldn't be checked.
+Turn off **Web search** in the chat, or set `WEB_SEARCH_ENABLED=false`.
+
+### "Gemini is temporarily overloaded"
+
+The model is busy. Calls are already retried three times with backoff and
+then fall back to `GEMINI_MODEL`. Wait a moment and ask again.
+
+### Answers cite whole videos ([V1]) instead of excerpts
+
+The agent answered from a summary rather than searching. Ask a more specific
+question, or use a fuller `GEMINI_AGENT_MODEL` — lighter models search less.
+
+---
+
+## Meetings and email
+
+### A task has no owner, or the wrong one
+
+Owners come from names spoken in the meeting. Add the person to **Contacts**
+(with any nicknames under "Other names"), then press **Re-match owners** — or
+type `@` in the owner field and pick them.
+
+### Emails say "Dry run" and never arrive
+
+`EMAIL_DRY_RUN` defaults to `true`. Configure SMTP in `.env`, set
+`EMAIL_DRY_RUN=false`, and restart. See [SETUP.md](SETUP.md#email-for-meeting-tasks-optional).
+
+### "SMTP login failed"
+
+For Gmail, use an **App Password** (needs 2-Step Verification), not your
+normal password. For other providers check host, port (587 STARTTLS, 465 SSL),
+and username.
+
+### "The recipient is not a saved contact. Re-draft this email."
+
+The contact's address changed (or was deleted) after the draft was made.
+Press **Prepare emails** again to rebuild the drafts.
+
+### Upload fails
+
+Only mp4, mkv, mov, webm, mp3, m4a, wav, and ogg are accepted, up to
+`MAX_UPLOAD_MB` (2048 MB by default).
+
+---
+
 ## Interface
 
 ### The page loads but nothing happens on Analyze

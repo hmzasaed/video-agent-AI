@@ -60,14 +60,19 @@ consumer product; it assumes a terminal and an API key.
 | R12 | Work without an internet round trip for transcription | ✅ |
 | R13 | Answer follow-up questions about the video, citing the passages used | ✅ |
 | R14 | Keep Q&A available after the job leaves memory or the server restarts | ✅ |
+| R15 | Compare two or more videos side by side | ✅ |
+| R16 | Answer questions across several videos, using the web when the videos don't cover it, with every claim cited | ✅ |
+| R17 | Analyze an uploaded meeting recording into minutes and structured tasks with owners and deadlines | ✅ |
+| R18 | Match task owners to saved contacts and let the user reassign with `@mentions` | ✅ |
+| R19 | Email each person their tasks — only after the user reviews and confirms each email | ✅ |
 
 ### Out of scope (v1 — deliberate)
 
 | Not building | Why |
 | --- | --- |
 | User accounts, multi-tenancy | Single-user local tool; auth adds no value here |
-| Persistent storage of past analyses | Adds a database for a tool used a few times a day |
-| Speaker diarization ("who said what") | Whisper does not do it; adding `pyannote` is a project of its own |
+| Speaker diarization ("who said what") | Whisper does not do it; adding `pyannote` is a project of its own. Owners come from names spoken |
+| Sending email without review | Every email needs explicit user confirmation — by design, not a gap |
 | Live/streaming transcription | Different architecture entirely — see [ROADMAP.md](ROADMAP.md) |
 | Non-English output | Whisper transcribes many languages, but prompts assume English |
 | Production deployment | `app.run()` is a dev server. See [ARCHITECTURE.md](ARCHITECTURE.md) |
@@ -146,6 +151,23 @@ index of the transcript and generated sections. Answers must:
 
 If indexing fails, the analysis is still delivered and the Ask tab says why
 Q&A is unavailable.
+
+### R16 — Research agent
+
+- Prefer the videos; use the web only for gaps or current facts.
+- Keep web information clearly separate from what a video said.
+- Cite every claim: `[V1-3]` excerpt, `[V1]` summary, `[W2]` web source.
+- Show the steps taken ("How I answered").
+- Say plainly when neither source answers.
+
+### R19 — Task emails
+
+- One email per person, listing all their tasks, deadlines, and the quote
+  from the meeting that supports each.
+- Recipients are limited to saved contacts.
+- Nothing is sent without a confirmation dialog; a dry-run mode is on by
+  default.
+- The agent may prepare drafts but can never send.
 
 ## 7. Success criteria
 

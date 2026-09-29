@@ -23,8 +23,11 @@ in [screenshots/](screenshots/).
 
 ## Conventions used in these docs
 
-- **Stage** means one of the five pipeline steps: download, transcribe,
-  summarize, extract, index.
+- **Stage** means one of the pipeline steps: download, transcribe,
+  summarize, extract, index — plus **tasks** for meetings.
+- **Workspace** means a group of analyzed videos the research agent works
+  across; its videos are referred to as V1, V2, ….
+- **Draft** means an unsent task email; only the user can send it.
 - **Job** means one analysis run, identified by a `job_id`.
 - Paths are relative to the repository root.
 - Anything marked *planned* does not exist yet.

@@ -11,47 +11,35 @@ work running on background threads.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│ Browser                                                         │
-│  templates/index.html — landing page + the analyzer             │
-│  static/css/style.css — tokens, components, motion              │
-│  static/js/main.js — starts a job, polls it, renders, Q&A chat  │
-│  static/js/site.js — scroll reveals, nav, mobile menu           │
+│ Browser — no framework, no build                                │
+│  templates/index.html   landing page + 3 tools + icon sprite    │
+│  static/js/main.js      Analyze: jobs, polling, results, Q&A    │
+│  static/js/agent.js     Compare & Ask: workspaces, agent chat   │
+│  static/js/meetings.js  task board, @mentions, contacts, email  │
+│  static/js/site.js      scroll reveals, nav, mobile menu        │
 └───────────────┬─────────────────────────────────────────────────┘
                 │ HTTP (JSON)
 ┌───────────────▼─────────────────────────────────────────────────┐
 │ app.py — Flask                                                  │
-│                                                                 │
-│  POST /api/analyze        → create job, spawn thread, return id │
-│  GET  /api/jobs/<id>      → snapshot of the job dict            │
-│  POST /api/jobs/<id>/cancel → set cancel flag                   │
-│  POST /api/jobs/<id>/ask  → answer a question, with citations   │
-│  GET  /api/health         → liveness + config                   │
-│                                                                 │
-│  JOBS: dict[str, dict]  guarded by JOBS_LOCK                    │
-└───────────────┬─────────────────────────────────────────────────┘
-                │ worker thread
-┌───────────────▼─────────────────────────────────────────────────┐
-│ Pipeline                                                        │
-│                                                                 │
-│  utils/audio_processor.py   yt-dlp → MP3 → mono 16kHz WAV →     │
-│                             10-minute chunks                    │
-│           │                                                     │
-│  core/transcriber.py        Whisper, per chunk, locally         │
-│           │                                                     │
-│  core/summarize.py          map: notes per section              │
-│                             reduce: one structured summary      │
-│           │                                                     │
-│  core/extractor.py          3 calls: actions / decisions / Qs   │
-│           │                                                     │
-│  core/vector_store.py       chunk + embed into local Chroma     │
-│                                                                 │
-│  core/gemini_client.py      REST wrapper over Gemini            │
-└─────────────────────────────────────────────────────────────────┘
-                │ later, per question
-┌───────────────▼─────────────────────────────────────────────────┐
-│ core/rag_engine.py   retrieve top-k chunks for this job →       │
-│                      Gemini answers from them, cites [1] [2]    │
-└─────────────────────────────────────────────────────────────────┘
+│  jobs:       /api/upload · /api/analyze · /api/jobs/<id>[/…]    │
+│  history:    /api/analyses[/<id>]                               │
+│  agent:      /api/workspaces[/<id>/{videos,compare,chat}]       │
+│  meetings:   /api/contacts · /api/tasks · /api/emails[/…/send]  │
+│  JOBS (in memory, running) ──on finish──► SQLite (core/db.py)   │
+└───────┬───────────────────────┬──────────────────────┬──────────┘
+        │ worker thread         │ per question         │ on user confirm
+┌───────▼──────────────────┐ ┌──▼─────────────────┐ ┌──▼──────────────┐
+│ Pipeline                 │ │ core/agent/        │ │ core/mailer.py  │
+│ audio_processor  yt-dlp  │ │  agent.py  loop    │ │  SMTP (TLS)     │
+│ transcriber      Whisper │ │  tools.py  search, │ │  dry-run default│
+│ summarize        map/red.│ │   summary, web,    │ └─────────────────┘
+│ meeting          minutes,│ │   tasks, drafts    │
+│                  tasks   │ │  compare.py        │ core/drafts.py
+│ extractor        3 calls │ │ core/rag_engine.py │  one draft per
+│ vector_store     Chroma  │ │  single-video Q&A  │  contact
+└───────┬──────────────────┘ └──┬─────────────────┘
+        └──────────┬────────────┘
+         core/gemini_client.py — REST, tools, retries, model fallback
 ```
 
 ## 2. Why background jobs
@@ -165,6 +153,24 @@ summary / actions / decisions / Qs ──split(1500, overlap 150)──┤
 - A failure here **does not fail the job.** The analysis is still returned,
   with `qa_ready: false` and a `qa_error` explaining why.
 
+### Meeting mode (`core/meeting.py`)
+
+`POST /api/analyze` with `"kind": "meeting"` runs the same pipeline plus:
+
+```text
+transcript ──► meeting_minutes()  attendees · agenda · discussion · decisions · next steps
+           ──► extract_tasks()    JSON: [{task, owner, due, evidence}] + people mentioned
+           ──► match_tasks()      owner name → saved contact
+```
+
+- Tasks are extracted from the **transcript** (plus the minutes for context),
+  not the summary, so owner names survive.
+- Owner matching: exact full name → alias → unique first name → `difflib`
+  fuzzy match (≥ 0.85). Ambiguous first names are left for the user.
+- Whisper does not identify speakers, so owners come from names people say,
+  not from who spoke. Speaker diarization is on the roadmap.
+- The minutes are indexed as their own `minutes` section for Q&A.
+
 ### Answering questions (`core/rag_engine.py`)
 
 `POST /api/jobs/<id>/ask` runs retrieval-augmented generation:
@@ -181,6 +187,72 @@ Because the index is on disk, Q&A keeps working for a job that has been pruned
 from memory or survives a server restart, as long as the browser still holds
 its `job_id`.
 
+### Research agent (`core/agent/`)
+
+`POST /api/workspaces/<id>/chat` runs a **native Gemini function-calling loop**
+— no agent framework:
+
+```text
+system prompt (workspace list, answer policy) + history + question
+   └─► Gemini (GEMINI_AGENT_MODEL) ──functionCall──► run tool ──functionResponse──┐
+            ▲                                                                    │
+            └────────────────────────── repeat, max AGENT_MAX_STEPS ◄────────────┘
+   └─► final text answer with [V1-3] / [V1] / [W2] citations
+```
+
+| Tool | Implementation |
+| --- | --- |
+| `search_videos` | `vector_store.search(doc_ids, …)` with a Chroma `$in` filter over the workspace's ids |
+| `get_summary` | Stored summary or minutes from SQLite |
+| `web_search` | A **separate** Gemini call with `tools: [{google_search: {}}]`; sources read from `groundingMetadata` |
+| `list_tasks`, `draft_task_emails` | SQLite tasks; drafts via `core/drafts.py` |
+| `list_videos` | Workspace listing |
+
+- **Answer policy:** videos first; web only for gaps or current facts; never
+  present web content as something a video said; refuse rather than guess.
+- **Citations:** each retrieved excerpt gets an id (`V2-3`), each summary its
+  video id (`V2`), each web source `W1`…, registered on a per-request
+  `ToolContext`, so every id in the answer maps to a returned source.
+- **Safety:** there is no send tool; tool output and transcripts are marked as
+  data, not instructions; drafts can only target saved contacts.
+- **Resilience:** Gemini calls retry 429/5xx/timeouts with backoff, then fall
+  back from `GEMINI_AGENT_MODEL` to `GEMINI_MODEL`. An exhausted quota fails
+  fast (no retries) and falls back once. After a web-search quota failure the
+  tool short-circuits for the rest of that answer.
+- **Comparison** (`compare.py`): one Gemini call over the stored summaries,
+  cached on the workspace until its videos change.
+
+### Email (`core/drafts.py`, `core/mailer.py`)
+
+```text
+tasks (with contact) ──draft_emails()──► one draft per contact (status: drafted)
+      user reviews/edits in the UI
+      user clicks Send → confirm dialog → POST /api/emails/<id>/send {confirm: true}
+            └─► recipient still a saved contact with that address?
+            └─► under 20 sends/minute?
+            └─► mailer.send(): dry-run log, or SMTP (STARTTLS / SSL on 465)
+```
+
+Drafting and sending are deliberately separate so neither the agent nor a
+prompt-injected transcript can send anything.
+
+### Persistence (`core/db.py`)
+
+Stdlib `sqlite3` at `DB_PATH` (default `data/app.db`), one short-lived
+connection per call, so it is safe from request and worker threads.
+
+| Table | Holds |
+| --- | --- |
+| `analyses` | Finished jobs: kind, source, title, metadata, transcript, summary, minutes, extractions, `qa_ready` |
+| `workspaces`, `workspace_videos` | Workspaces, their ordered videos, cached comparison |
+| `contacts` | Name, unique email (case-insensitive), aliases |
+| `tasks` | Meeting tasks: text, owner, contact, due, evidence, status |
+| `emails` | Drafts and sent mail: recipient, subject, body, task ids, status, error |
+
+A job is persisted **before** it flips to `done`, so a client never sees a
+finished meeting without its tasks. `GET /api/jobs/<id>` falls back to the
+database once a job leaves memory.
+
 ## 4. The job record
 
 One dict per analysis, the complete contract between backend and frontend:
@@ -189,12 +261,14 @@ One dict per analysis, the complete contract between backend and frontend:
 {
   "id": "7c273e66…",          "source": "https://youtu.be/…",
   "status": "running",         # running | done | error | cancelled
-  "stage": "transcribe",       # queued|download|transcribe|summarize|extract|index|done|error|cancelled
+  "kind": "video",             # video | meeting
+  "stage": "transcribe",       # queued|download|transcribe|summarize|extract|tasks|index|done|error|cancelled
   "message": "Transcribing chunk 2/5...",
   "percent": 42,
   "metadata": {"title": …, "uploader": …, "duration": …, "thumbnail": …},
   "transcript": "…",  "summary": "…",
   "action_items": "…", "decisions": "…", "questions": "…",
+  "minutes": "…", "people": […], "tasks": […],   # meetings only
   "qa_ready": True,            # the Q&A index was built
   "qa_error": None,            # why not, when qa_ready is False
   "error": None,
@@ -218,6 +292,9 @@ Stage completion percentages reflect measured time, not stage count:
 | summarize | 88% | A few API calls |
 | extract | 96% | Three API calls |
 | index | 100% | Local embedding, a few seconds |
+
+Meetings use `download 12 · transcribe 62 · summarize 80 · extract 88 ·
+tasks 94 · index 100` to make room for the minutes and tasks calls.
 
 Within transcription, percent interpolates across the 15→70 band by chunk.
 
@@ -272,6 +349,14 @@ See [DESIGN.md](DESIGN.md) for the visual and interaction layer.
 | `WHISPER_MODEL` | `base` | Whisper size — `tiny`…`large` |
 | `CHROMA_DIR` | `data/chroma` | Where the Q&A index is stored |
 | `RAG_TOP_K` | `6` | Chunks retrieved per question |
+| `GEMINI_AGENT_MODEL` | `gemini-3.5-flash` | Research agent and web search; falls back to `GEMINI_MODEL` |
+| `AGENT_MAX_STEPS` | `6` | Tool calls per agent answer |
+| `WEB_SEARCH_ENABLED` | `true` | Server-wide switch for Google Search grounding |
+| `SUMMARY_PROVIDER` | `gemini` | `mistral` summarizes with Mistral via LangChain |
+| `DB_PATH` | `data/app.db` | SQLite database |
+| `MAX_UPLOAD_MB` | `2048` | Upload size limit |
+| `EMAIL_DRY_RUN` | `true` | Log emails instead of sending |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | — | Outgoing mail; port 465 uses SSL, others STARTTLS |
 | `MISTRAL_API_KEY` | — | Reserved, unused |
 
 Loaded by `load_dotenv()` at the top of `app.py`, explicitly rather than as a
@@ -288,6 +373,11 @@ side effect of importing `gemini_client`.
 | Missing API key | `gemini_client` raises | Error + "add GOOGLE_API_KEY to .env" |
 | Gemini 429 | Status check | Error + "wait a minute and retry" |
 | Q&A indexing fails | `_index_for_qa` | Results shown; Ask tab explains Q&A is unavailable |
+| Gemini overloaded / timeout | `gemini_client` retries, then falls back | Usually nothing; otherwise "Gemini is busy" |
+| Quota exhausted | `QuotaError`, one fallback | "No quota left" with a link to usage |
+| Web search unavailable | `web_search` tool | Agent answers from the videos and says the web couldn't be checked |
+| SMTP failure | `/send` | Email and tasks marked `failed` with the reason; Retry button |
+| Database write fails | `_persist` | Logged; the in-memory result is still returned |
 | Anything else | Catch-all in `_run_analysis` | Message + full traceback to server log |
 
 Every path sets `status: "error"` on the job. The worker thread never crashes
@@ -299,6 +389,8 @@ This is a **local, single-user development server**. Before it could be
 deployed:
 
 - `app.run()` must be replaced with a WSGI server (gunicorn/waitress).
+- Email sending must be restricted to authenticated users, and SMTP
+  credentials moved to a secrets manager.
 - In-memory jobs must move to Redis or a database — multiple workers cannot
   see each other's `JOBS` dict.
 - The background thread must become a real task queue (Celery/RQ).

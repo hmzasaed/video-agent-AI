@@ -7,7 +7,7 @@
 const $ = (id) => document.getElementById(id);
 
 const POLL_INTERVAL_MS = 2000;
-const STAGE_ORDER = ["download", "transcribe", "summarize", "extract", "index"];
+const STAGE_ORDER = ["download", "transcribe", "summarize", "extract", "tasks", "index"];
 const RECENT_KEY = "recentSources";
 const THEME_KEY = "theme";
 const MAX_RECENT = 6;
@@ -24,6 +24,10 @@ const HTML_ESCAPES = {
 const ERROR_HINTS = [
     [/GOOGLE_API_KEY/i, "Add GOOGLE_API_KEY to your .env file and restart the server."],
     [/rate limit|429/i, "The Gemini free tier is rate limited. Wait a minute, then retry."],
+    [/no quota left/i, "Your Gemini API key's quota is used up for this feature. Check usage at ai.dev/rate-limit, wait for the quota to reset, or enable billing."],
+    [/overloaded|high demand|did not respond in time/i, "Gemini is busy right now. Wait a moment and ask again."],
+    [/SMTP login failed/i, "For Gmail, create an App Password (Google Account → Security → App passwords) and put it in SMTP_PASSWORD."],
+    [/Email is not configured/i, "Add SMTP_HOST, SMTP_USER, SMTP_PASSWORD and SMTP_FROM to .env, then restart the server."],
     [/whisper is not installed/i, "Run: pip install -r Requirements.txt"],
     [/ffmpeg|Errno 2.*ffmpeg/i, "FFmpeg is missing from your PATH. Install it, then restart the server."],
     [/no such file/i, "Check the file path — the file was not found on the server."],
@@ -120,10 +124,87 @@ function renderMarkdown(text) {
     return html.join("");
 }
 
-/* Turn [1]-style citations in rendered answer HTML into superscript markers. */
+/* Turn citations in rendered answer HTML into superscript markers.
+   Handles [1] and [1, 2] (single-video Q&A) and [V1-3], [V1], [W2], [V1-2, W1] (agent). */
+const CITE_ID = String.raw`(?:V\d{1,2}(?:-\d{1,3})?|W\d{1,2}|\d{1,2})`;
+const CITE_RE = new RegExp(String.raw`\[(${CITE_ID}(?:\s*,\s*${CITE_ID})*)\]`, "g");
+
 function linkCitations(html) {
-    return html.replace(/\[(\d{1,2}(?:\s*,\s*\d{1,2})*)\]/g,
-        (_, ids) => `<sup class="cite">[${ids.replace(/\s+/g, "")}]</sup>`);
+    return html.replace(CITE_RE, (_, ids) => {
+        const clean = ids.replace(/\s+/g, "");
+        return `<sup class="cite" data-refs="${clean}">[${clean}]</sup>`;
+    });
+}
+
+/* ── Small pure helpers shared with meetings.js and agent.js ───── */
+
+/* Text being typed after an "@" in an owner field, lower-cased. */
+function mentionQuery(value) {
+    return String(value || "").replace(/^\s*@/, "").trim().toLowerCase();
+}
+
+/* Contacts matching a mention query: name prefix first, then word, alias, email. */
+function filterContacts(contacts, query, limit = 8) {
+    const q = mentionQuery(query);
+    if (!q) return contacts.slice(0, limit);
+    const scored = [];
+    for (const contact of contacts) {
+        const name = contact.name.toLowerCase();
+        const aliases = (contact.aliases || "").toLowerCase().split(",").map((a) => a.trim());
+        let score = -1;
+        if (name.startsWith(q)) score = 0;
+        else if (name.split(/\s+/).some((word) => word.startsWith(q))) score = 1;
+        else if (aliases.some((alias) => alias && alias.startsWith(q))) score = 2;
+        else if (contact.email.toLowerCase().startsWith(q)) score = 3;
+        if (score >= 0) scored.push([score, contact]);
+    }
+    return scored
+        .sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name))
+        .slice(0, limit)
+        .map(([, contact]) => contact);
+}
+
+/* Tasks grouped by assigned contact, skipping dismissed ones. Unassigned under null. */
+function groupTasksByContact(tasks) {
+    const groups = new Map();
+    for (const task of tasks) {
+        if (task.status === "dismissed") continue;
+        const key = task.contact_id || null;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(task);
+    }
+    return groups;
+}
+
+const STATUS_LABELS = {
+    proposed: "Proposed",
+    approved: "Approved",
+    drafted: "Draft ready",
+    emailed: "Emailed",
+    failed: "Send failed",
+    dismissed: "Dismissed",
+    done: "Done",
+    sent: "Sent",
+    "dry-run": "Dry run",
+};
+
+function statusLabel(status) {
+    return STATUS_LABELS[status] || String(status || "");
+}
+
+/* fetch wrapper: JSON in, JSON out, throws Error(message) on failure. */
+async function api(path, { method = "GET", body, form } = {}) {
+    const options = { method };
+    if (form) options.body = form;
+    else if (body !== undefined) {
+        options.headers = { "Content-Type": "application/json" };
+        options.body = JSON.stringify(body);
+    }
+    const response = await fetch(path, options);
+    let data = {};
+    try { data = await response.json(); } catch { /* empty body */ }
+    if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+    return data;
 }
 
 /* ── Formatting helpers ────────────────────────────────────────── */
@@ -260,21 +341,104 @@ function stopTimers() {
 }
 
 function setBusy(busy) {
-    $("analyzeBtn").disabled = busy;
+    $("analyzeBtn").disabled = busy || uploading;
     $("analyzeBtn").textContent = busy ? "Analyzing..." : "Analyze";
-    $("videoUrl").disabled = busy;
+    $("videoUrl").disabled = busy || Boolean(uploaded);
+    $("uploadBtn").disabled = busy;
+    document.querySelectorAll('input[name="kind"]').forEach((radio) => { radio.disabled = busy; });
 }
 
 function looksLikeUrl(value) {
     return /^https?:\/\//i.test(value);
 }
 
+/* ── Mode (video / meeting) and uploads ────────────────────────── */
+let uploaded = null;   // {path, name} of a recording saved on the server
+let uploading = false;
+
+function currentKind() {
+    return $("modeMeeting").checked ? "meeting" : "video";
+}
+
+function paintMode() {
+    const meeting = currentKind() === "meeting";
+    $("modeHint").innerHTML = meeting
+        ? "Names spoken in the meeting are matched to your contacts, so you can email everyone their tasks."
+        : "Drop a file here, or paste a link. <kbd>Ctrl</kbd>+<kbd>K</kbd> focuses this box.";
+}
+
+/* Meetings have an extra Tasks step; renumber the stepper to match. */
+function paintStepper(kind) {
+    const meeting = kind === "meeting";
+    $("step-tasks").hidden = !meeting;
+    $("step-index").querySelector(".step-dot").textContent = meeting ? "6" : "5";
+    $("stepList").style.gridTemplateColumns = `repeat(${meeting ? 6 : 5}, 1fr)`;
+}
+
+function clearUpload() {
+    uploaded = null;
+    $("uploadChip").hidden = true;
+    $("videoUrl").value = "";
+    $("videoUrl").disabled = false;
+    $("fileInput").value = "";
+}
+
+function uploadFile(file) {
+    if (!file) return;
+    clearError();
+    uploaded = null;
+    uploading = true;
+    $("uploadChip").hidden = false;
+    $("uploadName").textContent = file.name;
+    $("uploadStatus").textContent = "Uploading 0%";
+    $("analyzeBtn").disabled = true;
+
+    // XMLHttpRequest rather than fetch, for upload progress.
+    const request = new XMLHttpRequest();
+    const form = new FormData();
+    form.append("file", file);
+    request.open("POST", "/api/upload");
+    request.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+            $("uploadStatus").textContent = `Uploading ${Math.round((event.loaded / event.total) * 100)}%`;
+        }
+    });
+    request.addEventListener("load", () => {
+        uploading = false;
+        let data = {};
+        try { data = JSON.parse(request.responseText); } catch { /* not JSON */ }
+        if (request.status !== 201) {
+            clearUpload();
+            showError(data.error || "The upload failed.");
+            $("analyzeBtn").disabled = false;
+            return;
+        }
+        uploaded = data;
+        $("uploadStatus").textContent = "Ready";
+        $("videoUrl").value = data.name;
+        $("videoUrl").disabled = true;
+        $("analyzeBtn").disabled = false;
+        if (!$("modeMeeting").checked && /meeting|sync|standup|call|zoom|teams/i.test(file.name)) {
+            toast("Looks like a meeting — switch to Meeting mode to get tasks");
+        }
+    });
+    request.addEventListener("error", () => {
+        uploading = false;
+        clearUpload();
+        showError("The upload failed. Check the server is running.");
+        $("analyzeBtn").disabled = false;
+    });
+    request.send(form);
+}
+
 /* ── Job lifecycle ─────────────────────────────────────────────── */
 async function startAnalysis() {
-    const source = $("videoUrl").value.trim();
+    const source = uploaded ? uploaded.path : $("videoUrl").value.trim();
+    const kind = currentKind();
 
+    if (uploading) return;
     if (!source) {
-        showError("Paste a YouTube URL or a local audio/video file path first.");
+        showError("Paste a YouTube URL, drop a recording, or enter a local file path first.");
         $("videoUrl").focus();
         return;
     }
@@ -286,6 +450,7 @@ async function startAnalysis() {
     $("progressMessage").textContent = "Starting...";
     $("percentLabel").textContent = "0%";
     paintMetadata(null);
+    paintStepper(kind);
     paintStages("download");
     setBusy(true);
 
@@ -299,7 +464,7 @@ async function startAnalysis() {
         const response = await fetch("/api/analyze", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: source }),
+            body: JSON.stringify({ url: source, kind, title: uploaded ? uploaded.name : "" }),
         });
 
         const data = await response.json();
@@ -308,7 +473,8 @@ async function startAnalysis() {
         }
 
         currentJobId = data.job_id;
-        rememberSource(source);
+        // Uploaded files live on the server under random names; don't list them as recent.
+        if (!uploaded) rememberSource(source);
         pollJob(currentJobId);
     } catch (error) {
         failWith(error.message);
@@ -377,10 +543,23 @@ function failWith(message) {
     showError(message);
 }
 
-function renderResults(job) {
+function renderResults(job, { quiet = false } = {}) {
     stopTimers();
+    currentJobId = job.id;
+    latestJob = job;
+    if (uploaded) clearUpload();
     setBusy(false);
     $("progressCard").style.display = "none";
+
+    // Meeting-only tabs: minutes, and the task board (rendered by meetings.js).
+    const meeting = job.kind === "meeting";
+    document.querySelector('.tab[data-tab="minutes"]').hidden = !meeting;
+    document.querySelector('.tab[data-tab="tasks"]').hidden = !meeting;
+    $("panel-minutes").innerHTML = meeting ? renderMarkdown(job.minutes) : "";
+    $("panel-tasks").innerHTML = "";
+    if (meeting && typeof renderTaskBoard === "function") {
+        renderTaskBoard($("panel-tasks"), job.id);
+    }
 
     $("panel-summary").innerHTML = renderMarkdown(job.summary);
     $("panel-actions").innerHTML = renderMarkdown(job.action_items);
@@ -403,15 +582,48 @@ function renderResults(job) {
         (took ? ` · analyzed in ${formatClock(took * 1000)}` : "");
 
     resetChat(job);
-    selectTab("summary");
+    selectTab(meeting ? "tasks" : "summary");
     $("results").classList.add("visible");
     $("results").scrollIntoView({ behavior: "smooth", block: "start" });
-    toast("Analysis complete");
+    if (!quiet) toast(meeting ? "Meeting analyzed — review the tasks" : "Analysis complete");
+    document.dispatchEvent(new CustomEvent("analysis:done", { detail: job }));
+}
+
+/* Load a stored analysis into the Analyze tab (from history or a workspace). */
+async function openAnalysis(analysisId) {
+    try {
+        const job = await api(`/api/analyses/${analysisId}`);
+        selectAppTab("analyze");
+        renderResults(job, { quiet: true });
+    } catch (error) {
+        toast(error.message);
+    }
+}
+
+/* ── App-level tools: Analyze · Compare & Ask · Meetings ───────── */
+function selectAppTab(name, { focus = false } = {}) {
+    document.querySelectorAll(".app-tab").forEach((tab) => {
+        const selected = tab.dataset.app === name;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        if (selected && focus) tab.focus();
+    });
+    document.querySelectorAll(".app-panel").forEach((panel) => {
+        panel.hidden = panel.id !== `app-${name}`;
+    });
+    document.dispatchEvent(new CustomEvent("apptab:change", { detail: name }));
+}
+
+function moveAppTab(offset) {
+    const tabs = [...document.querySelectorAll(".app-tab")];
+    const current = tabs.findIndex((t) => t.getAttribute("aria-selected") === "true");
+    selectAppTab(tabs[(current + offset + tabs.length) % tabs.length].dataset.app, { focus: true });
 }
 
 /* ── Ask (Q&A over the video) ──────────────────────────────────── */
 const SOURCE_LABELS = {
     summary: "Summary",
+    minutes: "Minutes",
     action_items: "Action items",
     decisions: "Decisions",
     questions: "Questions",
@@ -527,7 +739,7 @@ function selectTab(name) {
 }
 
 function moveTab(offset) {
-    const tabs = [...document.querySelectorAll(".tab")];
+    const tabs = [...document.querySelectorAll(".tab:not([hidden])")];
     const current = tabs.findIndex((t) => t.getAttribute("aria-selected") === "true");
     const next = tabs[(current + offset + tabs.length) % tabs.length];
     selectTab(next.dataset.tab);
@@ -585,13 +797,20 @@ function buildReport(format) {
     if (!latestJob) return "";
 
     const meta = latestJob.metadata || {};
-    const sections = [
-        ["Summary", latestJob.summary],
+    const sections = [["Summary", latestJob.summary]];
+    if (latestJob.kind === "meeting") {
+        sections.push(["Meeting Minutes", latestJob.minutes]);
+        const tasks = (latestJob.tasks || []).filter((t) => t.status !== "dismissed");
+        sections.push(["Assigned Tasks", tasks.map((t) =>
+            `- ${t.text} — ${t.contact_name || t.owner_name || "Unassigned"}` +
+            (t.due ? ` (due ${t.due})` : "")).join("\n")]);
+    }
+    sections.push(
         ["Action Items", latestJob.action_items],
         ["Decisions", latestJob.decisions],
         ["Questions", latestJob.questions],
         ["Full Transcript", latestJob.transcript],
-    ];
+    );
 
     if (chatHistory.length) {
         const qa = [];
@@ -717,8 +936,55 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("keydown", (event) => {
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
             event.preventDefault();
+            selectAppTab("analyze");
             $("videoUrl").focus();
             $("videoUrl").select();
         }
+    });
+
+    // Tools switcher.
+    document.querySelectorAll(".app-tab").forEach((tab) => {
+        tab.addEventListener("click", () => selectAppTab(tab.dataset.app));
+        tab.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowRight") { event.preventDefault(); moveAppTab(1); }
+            if (event.key === "ArrowLeft") { event.preventDefault(); moveAppTab(-1); }
+        });
+    });
+
+    // Video / meeting mode.
+    document.querySelectorAll('input[name="kind"]').forEach((radio) => {
+        radio.addEventListener("change", paintMode);
+    });
+    paintMode();
+
+    // Uploads: button, file picker, and drag-and-drop onto the input card.
+    $("uploadBtn").addEventListener("click", () => $("fileInput").click());
+    $("fileInput").addEventListener("change", (event) => uploadFile(event.target.files[0]));
+    $("uploadClear").addEventListener("click", () => { clearUpload(); $("videoUrl").focus(); });
+
+    const card = $("inputCard");
+    let dragDepth = 0;
+    card.addEventListener("dragenter", (event) => {
+        if (![...(event.dataTransfer?.types || [])].includes("Files")) return;
+        event.preventDefault();
+        dragDepth += 1;
+        card.classList.add("dragging");
+    });
+    card.addEventListener("dragover", (event) => event.preventDefault());
+    card.addEventListener("dragleave", () => {
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (!dragDepth) card.classList.remove("dragging");
+    });
+    card.addEventListener("drop", (event) => {
+        event.preventDefault();
+        dragDepth = 0;
+        card.classList.remove("dragging");
+        const file = event.dataTransfer?.files?.[0];
+        if (file && !$("analyzeBtn").disabled) uploadFile(file);
+    });
+
+    // "Compare" on a result opens the workspace builder with it pre-selected.
+    $("addToWorkspaceBtn").addEventListener("click", () => {
+        if (currentJobId && typeof openCompareWith === "function") openCompareWith(currentJobId);
     });
 });

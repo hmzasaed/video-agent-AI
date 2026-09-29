@@ -303,3 +303,75 @@ no framework and no build step; landing behaviour lives in a separate
 **Rejected.** A separate `/app` route (splits the experience and duplicates
 the header/theme logic for little gain); a CSS framework such as Tailwind
 (adds a build step, contradicting [ADR-007](#adr-007--no-frontend-framework-and-no-build-step)).
+
+---
+
+## ADR-013 — Research agent on native Gemini function calling
+
+**Status:** Accepted
+
+**Context.** Users want to compare several videos and ask questions that may
+need the web. A single RAG prompt can't decide *where* to look.
+
+**Decision.** A small function-calling loop in `core/agent/` using Gemini's own
+tool calling: `search_videos`, `get_summary`, `web_search`, `list_tasks`,
+`draft_task_emails`, `list_videos`. At most `AGENT_MAX_STEPS` calls, then a
+final tool-less answer. Web search is a *separate* Gemini call with Google
+Search grounding, so built-in search is never mixed with function calling.
+
+**Consequences.**
+
+- About 250 lines, no new dependency, and every step is visible in the UI.
+- Citations are assigned by the tools, so every id in an answer maps to a real
+  source.
+- A busy or out-of-quota agent model falls back to `GEMINI_MODEL`; lighter
+  models search less and cite whole summaries more often.
+
+**Rejected.** LangGraph/LangChain agents (a large dependency and abstraction
+for six tools); stuffing every transcript into one prompt (fails past a few
+videos and can't use the web).
+
+---
+
+## ADR-014 — Email needs human approval and a contacts allowlist
+
+**Status:** Accepted
+
+**Context.** Meeting tasks should reach the people assigned. Sending email is
+irreversible and outward-facing, and the text that decides "who gets what"
+comes from an untrusted transcript processed by an LLM.
+
+**Decision.** Drafting and sending are separate. Drafts are created by the UI
+or the agent; sending happens only through `POST /api/emails/<id>/send` with
+`confirm: true`, triggered from a confirmation dialog. Recipients must be saved
+contacts, re-checked at send time. Dry-run is the default.
+
+**Consequences.**
+
+- A prompt-injected transcript or web page cannot cause an email to be sent.
+- One extra click per batch ("Send all" confirms the whole list at once).
+- The agent can say "drafts are ready" but never "sent".
+
+**Rejected.** Letting the agent send directly (unsafe); free-typed recipient
+addresses (no allowlist to defend against injection); Gmail OAuth (heavier
+setup than SMTP with an App Password for a local tool).
+
+---
+
+## ADR-015 — SQLite for durable state
+
+**Status:** Accepted — supersedes the "in-memory only" limitation of ADR-001
+
+**Context.** Workspaces, contacts, tasks, and email logs must survive
+restarts; finished analyses must outlive the 2-hour in-memory TTL.
+
+**Decision.** Stdlib `sqlite3` in `core/db.py`, one short-lived connection per
+call. Running jobs stay in memory; a finished job is persisted before it is
+marked `done`.
+
+**Consequences.** No new dependency or service; history survives restarts;
+`GET /api/jobs/<id>` falls back to the database. Still single-process — a
+multi-worker deployment would need a server database.
+
+**Rejected.** Redis (another service to run); JSON files (no concurrent-write
+safety, no queries).

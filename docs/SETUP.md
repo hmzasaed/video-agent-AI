@@ -90,6 +90,45 @@ model…" while several hundred MB download. This is normal.
 
 `.env` is never committed — it is covered by `.gitignore`.
 
+### Research agent and web search
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `GEMINI_AGENT_MODEL` | `gemini-3.5-flash` | Tool-using model; falls back to `GEMINI_MODEL` if busy or out of quota |
+| `AGENT_MAX_STEPS` | `6` | Tool calls per answer |
+| `WEB_SEARCH_ENABLED` | `true` | Google Search grounding. Needs available quota on your key |
+
+### Summaries with Mistral (optional)
+
+Set `SUMMARY_PROVIDER=mistral` and `MISTRAL_API_KEY` to write summaries with
+Mistral (`MISTRAL_MODEL`, default `mistral-small-latest`) via LangChain.
+Everything else still uses Gemini.
+
+### Email for meeting tasks (optional)
+
+Emails stay in **dry-run** mode (logged on the server, not delivered) until you
+configure SMTP and turn it off:
+
+```ini
+EMAIL_DRY_RUN=false
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=you@gmail.com
+SMTP_PASSWORD=abcd efgh ijkl mnop
+SMTP_FROM=you@gmail.com
+```
+
+For **Gmail**: turn on 2-Step Verification, then create an App Password under
+Google Account → Security → App passwords, and use it as `SMTP_PASSWORD`. Your
+normal password will be rejected. Other providers work too; port `465` uses
+SSL, any other port STARTTLS.
+
+Restart the server after changing `.env`. `GET /api/health` then reports
+`"smtp_configured": true` and `"email_dry_run": false`.
+
+**Test it safely:** add yourself as a contact, analyze a short meeting where
+your name is mentioned with a task, then send the draft to your own address.
+
 ---
 
 ## Run
@@ -112,7 +151,8 @@ curl http://127.0.0.1:5000/api/health
 ```
 
 If `gemini_key_configured` is `false`, `.env` was not found or the key is
-blank. If `whisper_model` is not what you expected, check `.env` — a stale
+blank. The health response also shows `web_search_enabled`, `smtp_configured`,
+and `email_dry_run`. If `whisper_model` is not what you expected, check `.env` — a stale
 value there silently overrides the default.
 
 ### Command line

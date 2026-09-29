@@ -8,8 +8,9 @@ Follow [SETUP.md](SETUP.md), then confirm both suites pass before changing
 anything:
 
 ```powershell
-python tests/test_api.py        # 64 checks
-node tests/test_frontend.mjs    # 35 checks
+python tests/test_api.py                 # 174 checks
+.venv\Scripts\python tests/test_agent.py  # 45 checks
+node tests/test_frontend.mjs             # 54 checks
 ```
 
 If they fail on a clean checkout, fix that first — you cannot tell what you
@@ -27,12 +28,19 @@ core/
   summarize.py          Map-reduce summarization + length banding
   extractor.py          Action items, decisions, questions
   vector_store.py       Chroma index for Q&A (local embeddings)
-  rag_engine.py         Retrieval + cited answers
+  rag_engine.py         Retrieval + cited answers (single video)
+  db.py                 SQLite: analyses, workspaces, contacts, tasks, emails
+  meeting.py            Minutes, structured tasks, owner matching
+  drafts.py             One email draft per contact
+  mailer.py             SMTP send (dry-run by default)
+  agent/                Research agent: loop, tools, prompts, comparison
 utils/
   audio_processor.py    Download, convert, chunk
 templates/index.html    Markup only: landing page, analyzer, icon sprite
 static/css/style.css    Tokens, components, motion
 static/js/main.js       Analyzer: polling, rendering, Q&A, interaction
+static/js/agent.js      Compare & Ask: workspaces, agent chat
+static/js/meetings.js   Task board, @mentions, contacts, email
 static/js/site.js       Landing page: reveals, nav, mobile menu
 static/img/             Logo, favicons, illustrations
 tests/                  Both suites
@@ -113,9 +121,20 @@ a `hintFor` check to the frontend suite.
 
 ---
 
+### Adding an agent tool
+
+1. Write the implementation in `core/agent/tools.py` taking `ctx` first; return
+   a dict, and register anything citable on `ctx`.
+2. Add a declaration to `DECLARATIONS` and the function to `IMPLEMENTATIONS`.
+3. Mention it in `core/agent/prompts.py` if the model needs guidance.
+4. Test it in `tests/test_agent.py` with a scripted `functionCall`.
+
+**Never add a tool that sends, deletes, or publishes anything.** Actions with
+side effects go through a user-confirmed endpoint.
+
 ## Security rules
 
-Two, both non-negotiable.
+Three, all non-negotiable.
 
 **1. Everything reaching `innerHTML` is escaped.** Model output, transcripts,
 and video titles are all attacker-influenceable. Use `escapeHtml()` or
@@ -131,12 +150,17 @@ git status --short            # .env must not appear
 
 See [SECURITY.md](SECURITY.md).
 
+**3. Email only with explicit confirmation, only to saved contacts.** Do not
+add any code path that sends without the `/send` endpoint's checks, and do
+not give the agent a send tool.
+
 ---
 
 ## Before you commit
 
 - [ ] `python tests/test_api.py` passes
 - [ ] `node tests/test_frontend.mjs` passes
+- [ ] `python tests/test_agent.py` passes (venv)
 - [ ] Manually ran one real video end to end if you touched the pipeline
 - [ ] `git status` shows no `.env`, no `downloads/`, no `__pycache__/`
 - [ ] Docs updated if you changed the API, stages, or job shape
